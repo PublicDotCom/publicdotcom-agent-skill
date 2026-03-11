@@ -1,10 +1,10 @@
 ---
 name: publicdotcom-agent-skill
-description: Interact with your Public.com brokerage account using the Public.com API. Able to view portfolio, get stock quotes, place trades, and get account updates. To create a Public.com account head to public.com/signup.
+description: "Interact with your Public.com brokerage account using the Public.com API. Able to view portfolio, get stock quotes, place trades, and get account updates. To create a Public.com account head to public.com/signup."
 license: Apache-2.0
 metadata:
   author: PublicDotCom
-  source: https://github.com/PublicDotCom/publicdotcom-agent-skill
+  source: "https://github.com/PublicDotCom/publicdotcom-agent-skill"
   category: "Finance"
   tags: ["investing", "stocks", "crypto", "options", "public", "finance"]
   version: "1.0"
