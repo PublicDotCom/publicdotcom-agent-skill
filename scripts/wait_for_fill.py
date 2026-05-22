@@ -4,24 +4,18 @@ import sys
 import time
 from datetime import datetime
 
-from config import get_api_secret, get_account_id
+from config import get_api_secret, get_account_id, create_client
 
 try:
     from public_api_sdk import (
-        PublicApiClient,
-        PublicApiClientConfiguration,
         OrderStatus,
     )
-    from public_api_sdk.auth_config import ApiKeyAuthConfig
 except ImportError:
     print("Installing required dependency: publicdotcom-py...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "publicdotcom-py==0.1.15"])
     from public_api_sdk import (
-        PublicApiClient,
-        PublicApiClientConfiguration,
         OrderStatus,
     )
-    from public_api_sdk.auth_config import ApiKeyAuthConfig
 
 
 TERMINAL_STATUSES = {

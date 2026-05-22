@@ -1,18 +1,15 @@
 import argparse
-import os
 import subprocess
 import sys
 
-from config import get_api_secret, get_account_id
+from config import get_api_secret, get_account_id, create_client
 
 try:
-    from public_api_sdk import PublicApiClient, PublicApiClientConfiguration, HistoryRequest
-    from public_api_sdk.auth_config import ApiKeyAuthConfig
+    from public_api_sdk import HistoryRequest
 except ImportError:
     print("Installing required dependency: publicdotcom-py...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "publicdotcom-py==0.1.15"])
-    from public_api_sdk import PublicApiClient, PublicApiClientConfiguration, HistoryRequest
-    from public_api_sdk.auth_config import ApiKeyAuthConfig
+    from public_api_sdk import HistoryRequest
 
 
 def get_history(account_id=None, transaction_type=None, limit=None):
@@ -28,10 +25,7 @@ def get_history(account_id=None, transaction_type=None, limit=None):
         sys.exit(1)
 
     try:
-        client = PublicApiClient(
-            ApiKeyAuthConfig(api_secret_key=secret),
-            config=PublicApiClientConfiguration(default_account_number=account_id),
-        )
+        client = create_client(secret, account_id)
 
         # Page through results following next_token. Stop once we have `limit`
         # filtered transactions or there are no more pages.

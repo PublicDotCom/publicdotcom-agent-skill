@@ -8,8 +8,6 @@ from decimal import Decimal
 
 try:
     from public_api_sdk import (
-        PublicApiClient,
-        PublicApiClientConfiguration,
         OrderRequest,
         OrderInstrument,
         InstrumentType,
@@ -20,13 +18,10 @@ try:
         EquityMarketSession,
         OpenCloseIndicator,
     )
-    from public_api_sdk.auth_config import ApiKeyAuthConfig
 except ImportError:
     print("Installing required dependency: publicdotcom-py...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "publicdotcom-py==0.1.15"])
     from public_api_sdk import (
-        PublicApiClient,
-        PublicApiClientConfiguration,
         OrderRequest,
         OrderInstrument,
         InstrumentType,
@@ -37,9 +32,7 @@ except ImportError:
         EquityMarketSession,
         OpenCloseIndicator,
     )
-    from public_api_sdk.auth_config import ApiKeyAuthConfig
-
-from config import get_api_secret, get_account_id
+from config import get_api_secret, get_account_id, create_client
 
 
 def place_order(
@@ -124,10 +117,7 @@ def place_order(
             expiration_time_dt = expiration_time_dt.replace(tzinfo=timezone.utc)
 
     try:
-        client = PublicApiClient(
-            ApiKeyAuthConfig(api_secret_key=secret),
-            config=PublicApiClientConfiguration(default_account_number=account_id),
-        )
+        client = create_client(secret, account_id)
 
         # Build order request
         order_kwargs = {

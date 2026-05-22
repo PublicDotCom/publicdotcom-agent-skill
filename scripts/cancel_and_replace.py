@@ -5,30 +5,24 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from config import get_api_secret, get_account_id
+from config import get_api_secret, get_account_id, create_client
 
 try:
     from public_api_sdk import (
-        PublicApiClient,
-        PublicApiClientConfiguration,
         CancelAndReplaceRequest,
         OrderExpirationRequest,
         OrderType,
         TimeInForce,
     )
-    from public_api_sdk.auth_config import ApiKeyAuthConfig
 except ImportError:
     print("Installing required dependency: publicdotcom-py...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "publicdotcom-py==0.1.15"])
     from public_api_sdk import (
-        PublicApiClient,
-        PublicApiClientConfiguration,
         CancelAndReplaceRequest,
         OrderExpirationRequest,
         OrderType,
         TimeInForce,
     )
-    from public_api_sdk.auth_config import ApiKeyAuthConfig
 
 
 def _build_expiration(time_in_force, expiration_time):
@@ -87,10 +81,7 @@ def cancel_and_replace(
         sys.exit(1)
 
     try:
-        client = PublicApiClient(
-            ApiKeyAuthConfig(api_secret_key=secret),
-            config=PublicApiClientConfiguration(default_account_number=account_id),
-        )
+        client = create_client(secret, account_id)
 
         req_kwargs = {
             "order_id": order_id,

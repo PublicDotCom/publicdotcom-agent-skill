@@ -1,6 +1,13 @@
 ---
 name: publicdotcom-agent-skill
-description: "Interact with your Public.com brokerage account using the Public.com API. Able to view portfolio, get stock quotes, place trades, and get account updates. To create a Public.com account head to public.com/signup."
+description: Interact with your Public.com brokerage account using the Public.com API. Able to view portfolio, get stock quotes, place trades, and get account updates. To create a Public.com account head to public.com/signup.
+license: Apache-2.0
+metadata:
+  author: PublicDotCom
+  source: https://github.com/PublicDotCom/publicdotcom-agent-skill
+  category: "Finance"
+  tags: ["investing", "stocks", "crypto", "options", "public", "finance"]
+  version: "1.0"
 ---
 
 # Public.com Account Manager
@@ -36,12 +43,31 @@ If the user wants to set a default account for all requests:
 - Instruct them to set: `export PUBLIC_COM_ACCOUNT_ID=[VALUE]`
 - This eliminates the need to specify `--account-id` on each command.
 
+## Error Recovery
+
+If any command exits with an error, follow these steps before giving up:
+
+- **`PUBLIC_COM_SECRET` not set** — Ask the user for their API secret and instruct them to run `export PUBLIC_COM_SECRET=[VALUE]`, then retry.
+- **`No account ID provided`** — Run `python3 scripts/get_accounts.py` to retrieve the account ID, then retry the original command with `--account-id [ID]`.
+- **Authentication / 401 error** — Tell the user their API key may be expired or invalid, and direct them to https://public.com/settings/v2/api to generate a new one.
+- **Network / connection error** — Ask the user to check their internet connection and retry.
+- **Any other unexpected error** — Show the error message to the user and ask them how they'd like to proceed.
+
+Never silently retry the same failing command more than once.
+
 ## Available Commands
+
+### Check Setup
+Run this automatically the **first time** the user interacts with this skill, or whenever they ask "is everything configured?", "check my setup", or "verify my API key":
+1. Execute `python3 scripts/check_setup.py`
+2. If it exits successfully, proceed normally.
+3. If it fails, follow the printed instructions to resolve the issue before continuing.
 
 ### Get Accounts
 When the user asks to "get my accounts", "list accounts", or "show my Public.com accounts":
 1. Execute `python3 scripts/get_accounts.py`
 2. Report the account IDs and types back to the user.
+3. Remember the account IDs returned — use them automatically for any subsequent commands in the same session that require `--account-id`.
 
 ### Get Portfolio
 When the user asks to "get my portfolio", "show my holdings", or "what's in my account":
