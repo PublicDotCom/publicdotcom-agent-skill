@@ -18,7 +18,7 @@ metadata:
 This skill allows users to interact with their Public.com brokerage account.
 
 ## Prerequisites
-- **Python 3.8+** and **pip** — Required to run this skill.
+- **Python 3.9+** and **pip** — Required to run this skill.
 - **Public.com account** — Create one at https://public.com/signup
 - **Public.com API key** — Get one at https://public.com/settings/v2/api
 

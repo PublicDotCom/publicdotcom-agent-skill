@@ -43,10 +43,7 @@ def wait_for_fill(order_id, timeout=120.0, poll_seconds=1.0, fill_only=False, ac
         print("Error: No account ID provided. Either pass --account-id or set PUBLIC_COM_ACCOUNT_ID.")
         sys.exit(1)
 
-    client = PublicApiClient(
-        ApiKeyAuthConfig(api_secret_key=secret),
-        config=PublicApiClientConfiguration(default_account_number=account_id),
-    )
+    client = create_client(secret, account_id)
 
     target = {OrderStatus.FILLED} if fill_only else TERMINAL_STATUSES
     start = time.monotonic()

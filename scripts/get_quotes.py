@@ -45,12 +45,7 @@ def get_quotes(symbols, account_id=None):
     }
 
     try:
-        client = PublicApiClient(
-            ApiKeyAuthConfig(api_secret_key=secret),
-            config=PublicApiClientConfiguration(
-                default_account_number=account_id
-            )
-        )
+        client = create_client(secret, account_id)
 
         # Build list of instruments
         instruments = []

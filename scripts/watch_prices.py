@@ -59,10 +59,7 @@ def watch_prices(instrument_specs, poll_seconds=2.0, max_updates=None, account_i
         print(f"Error: {e}")
         sys.exit(1)
 
-    client = PublicApiClient(
-        ApiKeyAuthConfig(api_secret_key=secret),
-        config=PublicApiClientConfiguration(default_account_number=account_id),
-    )
+    client = create_client(secret, account_id)
 
     update_count = {"n": 0}
     stop = {"requested": False}

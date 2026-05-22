@@ -73,12 +73,7 @@ def get_bars(
         sys.exit(1)
 
     try:
-        client = PublicApiClient(
-            ApiKeyAuthConfig(api_secret_key=secret),
-            config=PublicApiClientConfiguration(
-                default_account_number=account_id
-            ) if account_id else None,
-        )
+        client = create_client(secret, account_id)
 
         kwargs = {
             "symbol": symbol,
