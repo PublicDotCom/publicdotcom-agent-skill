@@ -60,6 +60,7 @@ Each capability is implemented as a script under `scripts/`. The agent picks the
 
 | Script | Purpose |
 |---|---|
+| `check_setup.py` | Verify env vars are set and the API key works (run on first interaction) |
 | `get_accounts.py` | List accounts on the API key |
 | `get_portfolio.py` | Equity, buying power, positions |
 | `get_orders.py` | Active orders on an account |
