@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 
 try:
@@ -22,7 +23,7 @@ try:
     from public_api_sdk.auth_config import ApiKeyAuthConfig
 except ImportError:
     print("Installing required dependency: publicdotcom-py...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "publicdotcom-py==0.1.8"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "publicdotcom-py==0.1.15"])
     from public_api_sdk import (
         PublicApiClient,
         PublicApiClientConfiguration,
@@ -53,6 +54,7 @@ def place_order(
     session=None,
     open_close=None,
     time_in_force=None,
+    expiration_time=None,
     account_id=None,
 ):
     secret = get_api_secret()
@@ -107,7 +109,19 @@ def place_order(
     }
     time_in_force_map = {
         "DAY": TimeInForce.DAY,
+        "GTD": TimeInForce.GTD,
     }
+    if time_in_force and time_in_force not in time_in_force_map:
+        print(f"Error: Invalid --time-in-force '{time_in_force}'. Must be DAY or GTD.")
+        sys.exit(1)
+    if time_in_force == "GTD" and not expiration_time:
+        print("Error: --expiration-time YYYY-MM-DD is required when --time-in-force is GTD")
+        sys.exit(1)
+    expiration_time_dt = None
+    if expiration_time:
+        expiration_time_dt = datetime.fromisoformat(expiration_time)
+        if expiration_time_dt.tzinfo is None:
+            expiration_time_dt = expiration_time_dt.replace(tzinfo=timezone.utc)
 
     try:
         client = PublicApiClient(
@@ -124,7 +138,10 @@ def place_order(
             ),
             "order_side": side_map[side],
             "order_type": order_type_map[order_type],
-            "expiration": OrderExpirationRequest(time_in_force=time_in_force_map.get(time_in_force, TimeInForce.DAY)),
+            "expiration": OrderExpirationRequest(
+                time_in_force=time_in_force_map.get(time_in_force, TimeInForce.DAY),
+                expiration_time=expiration_time_dt,
+            ),
         }
 
         # Add quantity or amount
@@ -213,9 +230,13 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--time-in-force",
-        choices=["DAY", "GTC"],
+        choices=["DAY", "GTD"],
         default="DAY",
-        help="Time in force: DAY (default) or GTC (Good Till Cancelled)",
+        help="Time in force: DAY (default) or GTD (Good Till Date — requires --expiration-time)",
+    )
+    parser.add_argument(
+        "--expiration-time",
+        help="Required when --time-in-force=GTD. YYYY-MM-DD or ISO 8601. Max 90 days out.",
     )
     parser.add_argument("--account-id", help="Account ID (uses PUBLIC_COM_ACCOUNT_ID if not provided)")
 
@@ -233,5 +254,6 @@ if __name__ == "__main__":
         session=args.session,
         open_close=args.open_close,
         time_in_force=args.time_in_force,
+        expiration_time=args.expiration_time,
         account_id=args.account_id,
     )
