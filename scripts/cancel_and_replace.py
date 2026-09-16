@@ -1,28 +1,19 @@
 import argparse
-import subprocess
 import sys
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from config import get_api_secret, get_account_id, create_client
+from config import ensure_sdk, get_api_secret, get_account_id, create_client
 
-try:
-    from public_api_sdk import (
-        CancelAndReplaceRequest,
-        OrderExpirationRequest,
-        OrderType,
-        TimeInForce,
-    )
-except ImportError:
-    print("Installing required dependency: publicdotcom-py...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "publicdotcom-py==0.1.15"])
-    from public_api_sdk import (
-        CancelAndReplaceRequest,
-        OrderExpirationRequest,
-        OrderType,
-        TimeInForce,
-    )
+# Install/upgrade the pinned SDK before importing it (see config.SDK_VERSION).
+ensure_sdk()
+from public_api_sdk import (
+    CancelAndReplaceRequest,
+    OrderExpirationRequest,
+    OrderType,
+    TimeInForce,
+)
 
 
 def _build_expiration(time_in_force, expiration_time):
@@ -40,6 +31,7 @@ def cancel_and_replace(
     order_id,
     order_type,
     quantity=None,
+    amount=None,
     limit_price=None,
     stop_price=None,
     time_in_force="DAY",
@@ -60,6 +52,9 @@ def cancel_and_replace(
         print("Error: No account ID provided. Either pass --account-id or set PUBLIC_COM_ACCOUNT_ID.")
         sys.exit(1)
 
+    if quantity is not None and amount is not None:
+        print("Error: --quantity and --amount are mutually exclusive.")
+        sys.exit(1)
     if order_type in ("LIMIT", "STOP_LIMIT") and limit_price is None:
         print(f"Error: --limit-price is required for {order_type} orders.")
         sys.exit(1)
@@ -91,6 +86,8 @@ def cancel_and_replace(
         }
         if quantity is not None:
             req_kwargs["quantity"] = Decimal(str(quantity))
+        if amount is not None:
+            req_kwargs["amount"] = Decimal(str(amount))
         if limit_price is not None:
             req_kwargs["limit_price"] = Decimal(str(limit_price))
         if stop_price is not None:
@@ -108,6 +105,8 @@ def cancel_and_replace(
         print(f"  Time in Force: {time_in_force}")
         if quantity is not None:
             print(f"  Quantity:      {quantity}")
+        if amount is not None:
+            print(f"  Amount:        ${amount}")
         if limit_price is not None:
             print(f"  Limit Price:   ${limit_price}")
         if stop_price is not None:
@@ -136,7 +135,8 @@ if __name__ == "__main__":
         choices=["LIMIT", "MARKET", "STOP", "STOP_LIMIT"],
         help="Type of the replacement order",
     )
-    parser.add_argument("--quantity", type=float, help="New quantity (omit to keep original)")
+    parser.add_argument("--quantity", type=float, help="New quantity (omit to keep original; mutually exclusive with --amount)")
+    parser.add_argument("--amount", type=float, help="New notional dollar amount (mutually exclusive with --quantity)")
     parser.add_argument("--limit-price", type=float, help="New limit price (required for LIMIT/STOP_LIMIT)")
     parser.add_argument("--stop-price", type=float, help="New stop price (required for STOP/STOP_LIMIT)")
     parser.add_argument("--time-in-force", choices=["DAY", "GTD"], default="DAY")
@@ -151,6 +151,7 @@ if __name__ == "__main__":
         order_id=args.order_id,
         order_type=args.order_type,
         quantity=args.quantity,
+        amount=args.amount,
         limit_price=args.limit_price,
         stop_price=args.stop_price,
         time_in_force=args.time_in_force,

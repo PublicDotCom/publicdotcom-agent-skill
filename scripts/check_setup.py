@@ -4,7 +4,7 @@ Checks that required environment variables are set and the API key is valid.
 """
 import sys
 
-from config import get_api_secret, get_account_id, create_client
+from config import SDK_VERSION, ensure_sdk, get_api_secret, get_account_id, create_client
 
 
 def check_setup():
@@ -27,6 +27,12 @@ def check_setup():
     else:
         print("INFO: PUBLIC_COM_ACCOUNT_ID is not set (optional).")
         print("      Commands that need an account ID will look it up automatically.")
+
+    # Make sure the SDK is present at the pinned version
+    print("-" * 40)
+    ensure_sdk()
+    from importlib.metadata import version as _installed_version
+    print(f"OK:   publicdotcom-py {_installed_version('publicdotcom-py')} is installed (skill pins {SDK_VERSION}).")
 
     # Verify the API key works by fetching accounts
     print("-" * 40)

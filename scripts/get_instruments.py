@@ -1,23 +1,15 @@
 import argparse
-import subprocess
 import sys
 
-from config import get_api_secret, get_account_id, create_client
+from config import ensure_sdk, get_api_secret, get_account_id, create_client
 
-try:
-    from public_api_sdk import (
-        InstrumentsRequest,
-        InstrumentType,
-        Trading,
-    )
-except ImportError:
-    print("Installing required dependency: publicdotcom-py...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "publicdotcom-py==0.1.15"])
-    from public_api_sdk import (
-        InstrumentsRequest,
-        InstrumentType,
-        Trading,
-    )
+# Install/upgrade the pinned SDK before importing it (see config.SDK_VERSION).
+ensure_sdk()
+from public_api_sdk import (
+    InstrumentsRequest,
+    InstrumentType,
+    Trading,
+)
 
 
 def get_instruments(instrument_types=None, trading_filter=None, search=None, limit=None):

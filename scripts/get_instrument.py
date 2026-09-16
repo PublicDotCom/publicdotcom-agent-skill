@@ -1,15 +1,11 @@
 import argparse
-import subprocess
 import sys
 
-from config import get_api_secret, get_account_id, create_client
+from config import ensure_sdk, get_api_secret, get_account_id, create_client
 
-try:
-    from public_api_sdk import InstrumentType
-except ImportError:
-    print("Installing required dependency: publicdotcom-py...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "publicdotcom-py==0.1.15"])
-    from public_api_sdk import InstrumentType
+# Install/upgrade the pinned SDK before importing it (see config.SDK_VERSION).
+ensure_sdk()
+from public_api_sdk import InstrumentType
 
 
 def get_instrument(symbol, instrument_type="EQUITY"):
@@ -30,6 +26,7 @@ def get_instrument(symbol, instrument_type="EQUITY"):
         "EQUITY": InstrumentType.EQUITY,
         "OPTION": InstrumentType.OPTION,
         "CRYPTO": InstrumentType.CRYPTO,
+        "BOND": InstrumentType.BOND,
     }
 
     account_id = get_account_id()
@@ -43,7 +40,7 @@ def get_instrument(symbol, instrument_type="EQUITY"):
 
         inst_type = instrument_type_map.get(instrument_type.upper())
         if not inst_type:
-            print(f"Error: Invalid instrument type '{instrument_type}'. Must be EQUITY, OPTION, or CRYPTO.")
+            print(f"Error: Invalid instrument type '{instrument_type}'. Must be EQUITY, OPTION, CRYPTO, or BOND.")
             sys.exit(1)
 
         response = client.get_instrument(symbol=symbol, instrument_type=inst_type)
@@ -56,6 +53,10 @@ def get_instrument(symbol, instrument_type="EQUITY"):
         if response.instrument:
             print(f"\n  Symbol: {response.instrument.symbol}")
             print(f"  Type: {response.instrument.type.value}")
+
+        # Listing exchange (None when the API doesn't provide one)
+        if getattr(response, "exchange_name", None):
+            print(f"  Exchange: {response.exchange_name}")
 
         # Trading status
         if response.trading:
@@ -92,7 +93,8 @@ if __name__ == "__main__":
         epilog="Examples:\n"
                "  python3 get_instrument.py --symbol AAPL\n"
                "  python3 get_instrument.py --symbol AAPL --type EQUITY\n"
-               "  python3 get_instrument.py --symbol BTC --type CRYPTO",
+               "  python3 get_instrument.py --symbol BTC --type CRYPTO\n"
+               "  python3 get_instrument.py --symbol 912810TM0-BOND --type BOND",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
@@ -102,7 +104,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--type",
-        choices=["EQUITY", "OPTION", "CRYPTO"],
+        choices=["EQUITY", "OPTION", "CRYPTO", "BOND"],
         default="EQUITY",
         help="Instrument type (default: EQUITY)"
     )

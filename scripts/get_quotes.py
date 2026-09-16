@@ -1,22 +1,15 @@
 import argparse
 import os
-import subprocess
 import sys
 
-from config import get_api_secret, get_account_id, create_client
+from config import ensure_sdk, get_api_secret, get_account_id, create_client
 
-try:
-    from public_api_sdk import (
-        OrderInstrument,
-        InstrumentType,
-    )
-except ImportError:
-    print("Installing required dependency: publicdotcom-py...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "publicdotcom-py==0.1.15"])
-    from public_api_sdk import (
-        OrderInstrument,
-        InstrumentType,
-    )
+# Install/upgrade the pinned SDK before importing it (see config.SDK_VERSION).
+ensure_sdk()
+from public_api_sdk import (
+    OrderInstrument,
+    InstrumentType,
+)
 
 
 def get_quotes(symbols, account_id=None):
@@ -42,6 +35,7 @@ def get_quotes(symbols, account_id=None):
         "EQUITY": InstrumentType.EQUITY,
         "OPTION": InstrumentType.OPTION,
         "CRYPTO": InstrumentType.CRYPTO,
+        "BOND": InstrumentType.BOND,
     }
 
     try:
@@ -66,7 +60,8 @@ def get_quotes(symbols, account_id=None):
         for quote in quotes:
             inst = quote.instrument
             print(f"\n  {inst.symbol} ({inst.type.value})")
-            print(f"    Last Price: ${quote.last:,.2f}")
+            if quote.last is not None:
+                print(f"    Last Price: ${quote.last:,.2f}")
 
             if hasattr(quote, 'bid') and quote.bid is not None:
                 print(f"    Bid: ${quote.bid:,.2f}")
@@ -86,6 +81,23 @@ def get_quotes(symbols, account_id=None):
                 print(f"    Low: ${quote.low:,.2f}")
             if hasattr(quote, 'close') and quote.close is not None:
                 print(f"    Previous Close: ${quote.close:,.2f}")
+
+            # Bond-specific pricing (markup, minimum sizes, suggested prices)
+            bd = getattr(quote, 'bond_details', None)
+            if bd is not None:
+                print("    Bond Details:")
+                for label, value in (
+                    ("Suggested Buy Price", bd.suggested_buy_price),
+                    ("Suggested Sell Price", bd.suggested_sell_price),
+                    ("Ask Markup", bd.ask_markup),
+                    ("Bid Markup", bd.bid_markup),
+                    ("Min Buy Amount", bd.min_buy_amount),
+                    ("Min Buy Increment", bd.min_buy_increment_amount),
+                    ("Ask Min Size", bd.ask_min_size),
+                    ("Bid Min Size", bd.bid_min_size),
+                ):
+                    if value is not None:
+                        print(f"      {label}: {value}")
 
         print("\n" + "=" * 60)
 
@@ -108,8 +120,8 @@ def parse_symbol_arg(arg):
         symbol = arg.upper()
         inst_type = "EQUITY"
 
-    if inst_type not in ["EQUITY", "OPTION", "CRYPTO"]:
-        print(f"Error: Invalid instrument type '{inst_type}'. Must be EQUITY, OPTION, or CRYPTO.")
+    if inst_type not in ["EQUITY", "OPTION", "CRYPTO", "BOND"]:
+        print(f"Error: Invalid instrument type '{inst_type}'. Must be EQUITY, OPTION, CRYPTO, or BOND.")
         sys.exit(1)
 
     return (symbol, inst_type)
@@ -122,13 +134,14 @@ if __name__ == "__main__":
                "  python3 get_quotes.py AAPL\n"
                "  python3 get_quotes.py AAPL GOOGL MSFT\n"
                "  python3 get_quotes.py AAPL:EQUITY BTC:CRYPTO\n"
-               "  python3 get_quotes.py AAPL260320C00280000:OPTION",
+               "  python3 get_quotes.py AAPL260320C00280000:OPTION\n"
+               "  python3 get_quotes.py 912810TM0-BOND:BOND",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
         "symbols",
         nargs="+",
-        help="Symbol(s) to quote in format SYMBOL or SYMBOL:TYPE (TYPE defaults to EQUITY)"
+        help="Symbol(s) to quote in format SYMBOL or SYMBOL:TYPE (TYPE = EQUITY, OPTION, CRYPTO or BOND; defaults to EQUITY)"
     )
     parser.add_argument(
         "--account-id",

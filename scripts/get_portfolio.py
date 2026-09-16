@@ -34,6 +34,20 @@ def get_portfolio(account_id=None):
         print(f"  Cash Only:            ${bp.cash_only_buying_power:,.2f}")
         print(f"  Options Buying Power: ${bp.options_buying_power:,.2f}")
 
+        # Cash & withdrawals (all optional in the API)
+        atw = portfolio.available_to_withdraw
+        if portfolio.cash is not None or portfolio.total_account_value is not None or atw is not None:
+            print("\n🏦 CASH & WITHDRAWALS")
+            print("-" * 40)
+            if portfolio.total_account_value is not None:
+                print(f"  Total Account Value:  ${portfolio.total_account_value:,.2f}")
+            if portfolio.cash is not None:
+                print(f"  Cash:                 ${portfolio.cash:,.2f}")
+            if atw is not None:
+                print(f"  Available to Withdraw: ${atw.available_to_withdraw:,.2f}")
+                if atw.cash_only_available_to_withdraw != atw.available_to_withdraw:
+                    print(f"  Cash-only Withdrawable: ${atw.cash_only_available_to_withdraw:,.2f}")
+
         # Equity Breakdown
         print("\n💰 EQUITY BREAKDOWN")
         print("-" * 40)
