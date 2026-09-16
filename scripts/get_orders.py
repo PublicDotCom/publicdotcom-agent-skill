@@ -39,6 +39,9 @@ def get_orders(account_id=None):
             print(f"    Side: {order.side.value}")
             print(f"    Type: {order.type.value}")
             print(f"    Status: {order.status.value}")
+            if order.bracket_id:
+                role = "entry" if order.bracket_id == order.order_id else "exit leg"
+                print(f"    Bracket ID: {order.bracket_id} ({role})")
 
             # Quantity or notional
             if order.quantity is not None:

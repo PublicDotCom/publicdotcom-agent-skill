@@ -1,38 +1,24 @@
 import argparse
-import subprocess
 import sys
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from config import get_api_secret, get_account_id, create_client
+from config import ensure_sdk, get_api_secret, get_account_id, create_client
 
-try:
-    from public_api_sdk import (
-        MultilegOrderRequest,
-        OrderLegRequest,
-        LegInstrument,
-        LegInstrumentType,
-        OrderSide,
-        OrderType,
-        OpenCloseIndicator,
-        OrderExpirationRequest,
-        TimeInForce,
-    )
-except ImportError:
-    print("Installing required dependency: publicdotcom-py...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "publicdotcom-py==0.1.15"])
-    from public_api_sdk import (
-        MultilegOrderRequest,
-        OrderLegRequest,
-        LegInstrument,
-        LegInstrumentType,
-        OrderSide,
-        OrderType,
-        OpenCloseIndicator,
-        OrderExpirationRequest,
-        TimeInForce,
-    )
+# Install/upgrade the pinned SDK before importing it (see config.SDK_VERSION).
+ensure_sdk()
+from public_api_sdk import (
+    MultilegOrderRequest,
+    OrderLegRequest,
+    LegInstrument,
+    LegInstrumentType,
+    OrderSide,
+    OrderType,
+    OpenCloseIndicator,
+    OrderExpirationRequest,
+    TimeInForce,
+)
 
 
 def parse_leg(spec):

@@ -1,23 +1,16 @@
 import argparse
-import subprocess
 import sys
 
-from config import get_api_secret, get_account_id, create_client
+from config import ensure_sdk, get_api_secret, get_account_id, create_client
 
-try:
-    from public_api_sdk import (
-        BarPeriod,
-        BarAggregation,
-        InstrumentType,
-    )
-except ImportError:
-    print("Installing required dependency: publicdotcom-py...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "publicdotcom-py==0.1.15"])
-    from public_api_sdk import (
-        BarPeriod,
-        BarAggregation,
-        InstrumentType,
-    )
+# Install/upgrade the pinned SDK before importing it (see config.SDK_VERSION).
+ensure_sdk()
+from public_api_sdk import (
+    BarPeriod,
+    BarAggregation,
+    InstrumentType,
+    TradingSessionToggle,
+)
 
 
 def get_bars(
@@ -26,6 +19,8 @@ def get_bars(
     instrument_type="EQUITY",
     aggregation=None,
     purchase_date=None,
+    session_toggle=None,
+    ipo_date=None,
     account_id=None,
 ):
     """
@@ -38,6 +33,10 @@ def get_bars(
         instrument_type: EQUITY, CRYPTO, OPTION, or INDEX. Defaults to EQUITY.
         aggregation: Optional bar size override (ONE_MINUTE, FIVE_MINUTES, ...)
         purchase_date: Required when period=SINCE_PURCHASE. Format YYYY-MM-DD.
+        session_toggle: DAY equity charts only — REGULAR_HOURS, REGULAR_AND_EXTENDED_HOURS
+                (server default) or ALL_SESSIONS (adds the overnight 00:00-04:00 / 20:00-24:00 buckets)
+        ipo_date: The asset's IPO / first-trade date (YYYY-MM-DD). For assets younger than the
+                period the server returns finer bars plus a `leading_fill` describing the flat lead-in.
         account_id: Account ID (optional; uses PUBLIC_COM_ACCOUNT_ID env var if unset)
     """
     secret = get_api_secret()
@@ -84,6 +83,10 @@ def get_bars(
             kwargs["aggregation"] = aggregation_map[aggregation]
         if purchase_date is not None:
             kwargs["purchase_date"] = purchase_date
+        if session_toggle is not None:
+            kwargs["trading_session_toggle"] = TradingSessionToggle[session_toggle]
+        if ipo_date is not None:
+            kwargs["ipo_date"] = ipo_date
 
         response = client.get_bars(**kwargs)
 
@@ -106,11 +109,21 @@ def get_bars(
             if last.percent_change is not None:
                 print(f"    Percent Change: {last.percent_change}%")
 
-        for label, session in (
+        if response.leading_fill is not None:
+            lf = response.leading_fill
+            print(f"\n  Leading Fill (asset younger than the period): {lf.count} flat bar(s) at ${lf.value}")
+            print(f"    from {lf.start_timestamp} to the first real bar at {lf.end_timestamp}")
+
+        sessions = [
+            ("PRE-MARKET OVERNIGHT (00:00-04:00 ET)", response.pre_market_overnight),
             ("PRE-MARKET", response.pre_market),
             ("REGULAR MARKET", response.regular_market),
             ("AFTER-HOURS", response.after_market),
-        ):
+            ("POST-MARKET OVERNIGHT (20:00-24:00 ET)", response.post_market_overnight),
+        ]
+        for label, session in sessions:
+            if session is None:  # overnight buckets only come back with ALL_SESSIONS
+                continue
             print("\n" + "-" * 60)
             print(f"{label}  (expected: {session.expected_bars}, returned: {len(session.bars)})")
             print("-" * 60)
@@ -135,7 +148,9 @@ if __name__ == "__main__":
                "  python3 get_bars.py --symbol AAPL --period YEAR\n"
                "  python3 get_bars.py --symbol AAPL --period MONTH --aggregation ONE_DAY\n"
                "  python3 get_bars.py --symbol BTC --type CRYPTO --period WEEK\n"
-               "  python3 get_bars.py --symbol AAPL --period SINCE_PURCHASE --purchase-date 2024-01-15",
+               "  python3 get_bars.py --symbol AAPL --period SINCE_PURCHASE --purchase-date 2024-01-15\n"
+               "  python3 get_bars.py --symbol AAPL --period DAY --session-toggle ALL_SESSIONS\n"
+               "  python3 get_bars.py --symbol NEWCO --period YEAR --ipo-date 2026-03-15",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--symbol", required=True, help="Symbol (e.g. AAPL, BTC, OSI option symbol)")
@@ -161,6 +176,16 @@ if __name__ == "__main__":
         help="Required for --period SINCE_PURCHASE. Format: YYYY-MM-DD",
     )
     parser.add_argument(
+        "--session-toggle",
+        choices=[t.name for t in TradingSessionToggle],
+        help="DAY equity charts: REGULAR_HOURS (9:30-16:00 ET), REGULAR_AND_EXTENDED_HOURS (4:00-20:00 ET, "
+             "server default) or ALL_SESSIONS (midnight-to-midnight, adds the overnight buckets)",
+    )
+    parser.add_argument(
+        "--ipo-date",
+        help="IPO / first-trade date (YYYY-MM-DD) for recently listed assets; enables finer bars plus a leading-fill summary",
+    )
+    parser.add_argument(
         "--account-id",
         help="Account ID (uses PUBLIC_COM_ACCOUNT_ID env var if not provided)",
     )
@@ -173,5 +198,7 @@ if __name__ == "__main__":
         instrument_type=args.type,
         aggregation=args.aggregation,
         purchase_date=args.purchase_date,
+        session_toggle=args.session_toggle,
+        ipo_date=args.ipo_date,
         account_id=args.account_id,
     )

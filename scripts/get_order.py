@@ -30,6 +30,9 @@ def get_order(order_id, account_id=None):
         print(f"  Symbol:        {inst.symbol} ({inst.type.value})")
         print(f"  Side:          {order.side.value}")
         print(f"  Order Type:    {order.type.value}")
+        if order.bracket_id:
+            role = "entry" if order.bracket_id == order.order_id else "exit leg"
+            print(f"  Bracket ID:    {order.bracket_id}  ({role} of a bracket order)")
 
         if order.quantity is not None:
             print(f"  Quantity:      {order.quantity}")
