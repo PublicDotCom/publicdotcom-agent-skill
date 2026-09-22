@@ -5,6 +5,7 @@
 This is an agent skill for interacting with your Public.com brokerage account. You can:
 
 - View accounts, portfolio (including cash and available-to-withdraw), orders, and transaction history
+- Search the last 30 days of order history by status, side, symbol, security type or time window, and inspect an order's individual fills
 - Review unrealized tax lots (summary, per-symbol detail, CSV export) and sell specific lots
 - Get live quotes and historical bars; stream real-time price changes
 - List option chains, expirations, and greeks; quote a multi-leg strategy as a whole
@@ -23,7 +24,7 @@ We recommend running this skill in as isolated of an environment as possible. If
 
 There are a few prerequisites needed to get started:
 
-- **Python 3.9+** and **pip** — Required to run this skill. The skill's scripts use the `publicdotcom-py` SDK (pinned to `0.1.23` in `scripts/config.py` and `requirements.txt`), which is auto-installed — or upgraded from an older version — on first run.
+- **Python 3.9+** and **pip** — Required to run this skill. The skill's scripts use the `publicdotcom-py` SDK (pinned to `0.1.24` in `scripts/config.py` and `requirements.txt`), which is auto-installed — or upgraded from an older version — on first run.
 - **Public.com account** — Create one at https://public.com/signup
 - **Public.com API key** — Once you create your Public.com brokerage account, get an API key at https://public.com/settings/v2/api
 
@@ -67,6 +68,8 @@ Each capability is implemented as a script under `scripts/`. The agent picks the
 | `get_portfolio.py` | Equity, buying power, positions |
 | `get_orders.py` | Active orders on an account |
 | `get_order.py` | Status and details of a specific order |
+| `search_orders.py` | Search the last 30 days of orders (any status, up to 500) by status / side / symbol / security type / open-close / created window |
+| `get_order_v2.py` | v2 detail for one order: everything in `get_order.py` plus market session, fill / replace / last-modified timestamps and each individual trade (fill); last 30 days only |
 | `get_history.py` | Transaction history (paginated; filter by TRADE / MONEY_MOVEMENT / POSITION_ADJUSTMENT) |
 | `get_tax_lots.py` | Unrealized tax lots: account summary, per-symbol lot detail (optionally at a hypothetical price), or CSV export |
 | `get_quotes.py` | Live quotes for one or more instruments (equity, option, crypto, bond) |
@@ -97,6 +100,7 @@ For per-command argument details, see [SKILL.md](SKILL.md) or run any script wit
 - Can you get me the options chain for Nvidia for options expiring tomorrow?
 - Can you get me the current quotes for Apple, Google, and Microsoft?
 - Can you get my account history and list out the deposits I've made?
+- Show me every order that filled this week, then list the individual fills for the largest one.
 - Watch Apple's price and tell me when it moves. Stop after 10 changes.
 - I placed order `<id>` — wait until it fills and then summarize the fill price.
 - Change order `<id>` to a limit of $230 with 20 shares.

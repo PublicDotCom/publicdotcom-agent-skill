@@ -1,1 +1,1 @@
-publicdotcom-py==0.1.23
+publicdotcom-py==0.1.24

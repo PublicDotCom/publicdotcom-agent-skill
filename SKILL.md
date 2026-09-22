@@ -7,7 +7,7 @@ metadata:
   source: https://github.com/PublicDotCom/publicdotcom-agent-skill
   category: "Finance"
   tags: ["investing", "stocks", "crypto", "options", "public", "finance"]
-  version: "1.1"
+  version: "1.2"
 ---
 
 # Public.com Account Manager
@@ -22,9 +22,9 @@ This skill allows users to interact with their Public.com brokerage account.
 - **Public.com account** — Create one at https://public.com/signup
 - **Public.com API key** — Get one at https://public.com/settings/v2/api
 
-The `publicdotcom-py` SDK is required, pinned to **0.1.23** (`scripts/config.py`). It will be **auto-installed** on first run — and auto-upgraded if an older version is present — or you can install manually:
+The `publicdotcom-py` SDK is required, pinned to **0.1.24** (`scripts/config.py`). It will be **auto-installed** on first run — and auto-upgraded if an older version is present — or you can install manually:
 ```bash
-pip install publicdotcom-py==0.1.23
+pip install publicdotcom-py==0.1.24
 ```
 
 ## Configuration
@@ -82,6 +82,35 @@ When the user asks to "get my orders", "show my orders", "active orders", or "pe
 2. If not set and you don't know the user's account ID, first run `get_accounts.py` to retrieve it.
 3. Execute `python3 scripts/get_orders.py --account-id [ACCOUNT_ID]`
 4. Report the active orders with their details (symbol, side, type, status, quantity, prices) back to the user.
+5. This lists only orders that are currently **working** (taken from the portfolio snapshot). For filled, cancelled, rejected or otherwise completed orders — or any question about *past* orders — use **Search Orders** below.
+
+### Search Orders
+When the user asks for "order history", "show my filled orders last week", "what did I buy this month", "list my cancelled orders", "all my AAPL orders", "did my sell go through yesterday", or anything about orders that are no longer active:
+
+**Scope:** searches every order created in the **last 30 days** (any status), returning at most **500**. Older orders are not searchable; for a live view of only the currently working orders use `get_orders.py`.
+
+**All filters are optional — combine them to narrow results:**
+- `--status`: NEW, PARTIALLY_FILLED, FILLED, CANCELLED, QUEUED_CANCELLED, REJECTED, PENDING_REPLACE, PENDING_CANCEL, EXPIRED, REPLACED
+- `--side`: BUY or SELL
+- `--symbol SYMBOL[:TYPE]`: one instrument; repeat the flag for several. TYPE defaults to EQUITY (e.g. `AAPL`, `BTC:CRYPTO`, `AAPL260918C00200000:OPTION`)
+- `--security-type`: EQUITY, OPTION, MULTI_LEG_INSTRUMENT, CRYPTO, ALT, TREASURY, BOND, INDEX
+- `--open-close`: OPEN or CLOSE (options and short sales)
+- `--created-after` / `--created-before`: `YYYY-MM-DD` or an ISO 8601 timestamp (`2026-09-01T00:00:00Z`); bare dates and times without an offset are treated as UTC
+
+**Examples:**
+
+```bash
+python3 scripts/search_orders.py
+python3 scripts/search_orders.py --status FILLED --side BUY --symbol AAPL --created-after 2026-09-01
+python3 scripts/search_orders.py --status CANCELLED --security-type OPTION --created-after 2026-09-08T00:00:00Z --created-before 2026-09-15T00:00:00Z
+python3 scripts/search_orders.py --symbol AAPL --symbol BTC:CRYPTO
+```
+
+**Workflow:**
+1. Translate the user's request into filters. Relative phrases ("last week", "this month") become `--created-after` / `--created-before` timestamps; "filled" / "cancelled" become `--status`.
+2. Execute `python3 scripts/search_orders.py [FILTERS]` and summarize the matches (symbol, side, type, status, quantity or notional, filled quantity and average price, created / filled time, bracket ID).
+3. If the output warns that the result was capped at 500, tighten the window or add filters and run again.
+4. For the individual fills (trades), market session and fill / replace timestamps of one order, follow up with `get_order_v2.py --order-id [ID]` (see **Get Order Details (v2)**).
 
 ### Get History
 When the user asks to "get my history", "show my transactions", "transaction history", "trade history", or wants to see past account activity:
@@ -783,6 +812,24 @@ python3 scripts/get_order.py --order-id 345d3e58-5ba3-401a-ac89-1b756332cc94
 2. Report the order's status, filled quantity, average price, and reject reason (if any).
 3. Multi-leg orders also include a per-leg breakdown.
 4. Bracket orders show a **Bracket ID** (the entry order's ID). Use it to relate the entry to its take-profit / stop-loss legs in `get_orders.py`.
+5. This is the v1 view and works for orders of any age. When the user wants the individual fills, the market session, or when exactly an order filled / was replaced, use **Get Order Details (v2)** instead.
+
+### Get Order Details (v2)
+When the user asks "what trades filled this order", "show the fills for order X", "when did order X fill", "at what prices did my order execute", "which session was this order placed in", or wants more than the basic status of a recent order:
+
+**Required parameters:**
+- `--order-id`: The order ID to look up
+
+**Example:**
+```bash
+python3 scripts/get_order_v2.py --order-id 345d3e58-5ba3-401a-ac89-1b756332cc94
+```
+
+**Workflow:**
+1. Execute: `python3 scripts/get_order_v2.py --order-id [ID]`
+2. Report everything `get_order.py` reports, plus the **Session** (REGULAR, REST_OF_DAY or TWENTY_FOUR_HOURS — as reported by the API; these names differ from the `--session` values used when placing an order), the **Timeline** (created, filled, replaced, closed, last modified) and each **Trade**: side, quantity, symbol, execution price, time and trade ID. Partial fills show up as several trades; the order's average price is the quantity-weighted mean of them.
+3. Only orders created within the **last 30 days** are available here — an older order returns a not-found error; fall back to `get_order.py` for it.
+4. To find the order ID first (e.g. "my AAPL buy from Tuesday"), run **Search Orders** and pick the matching order.
 
 ### Wait For Fill
 When the user wants to "wait until my order fills", "block until filled", or wants the agent to monitor an order through to a terminal state before doing the next step:
