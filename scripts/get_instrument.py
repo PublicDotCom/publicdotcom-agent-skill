@@ -14,7 +14,7 @@ def get_instrument(symbol, instrument_type="EQUITY"):
 
     Args:
         symbol: The ticker symbol (e.g., AAPL, BTC)
-        instrument_type: The instrument type (EQUITY, OPTION, CRYPTO)
+        instrument_type: The instrument type (EQUITY, OPTION, CRYPTO, BOND, EVENTCONTRACT)
     """
     secret = get_api_secret()
 
@@ -27,6 +27,7 @@ def get_instrument(symbol, instrument_type="EQUITY"):
         "OPTION": InstrumentType.OPTION,
         "CRYPTO": InstrumentType.CRYPTO,
         "BOND": InstrumentType.BOND,
+        "EVENTCONTRACT": InstrumentType.EVENTCONTRACT,
     }
 
     account_id = get_account_id()
@@ -40,7 +41,7 @@ def get_instrument(symbol, instrument_type="EQUITY"):
 
         inst_type = instrument_type_map.get(instrument_type.upper())
         if not inst_type:
-            print(f"Error: Invalid instrument type '{instrument_type}'. Must be EQUITY, OPTION, CRYPTO, or BOND.")
+            print(f"Error: Invalid instrument type '{instrument_type}'. Must be EQUITY, OPTION, CRYPTO, BOND, or EVENTCONTRACT.")
             sys.exit(1)
 
         response = client.get_instrument(symbol=symbol, instrument_type=inst_type)
@@ -104,7 +105,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--type",
-        choices=["EQUITY", "OPTION", "CRYPTO", "BOND"],
+        choices=["EQUITY", "OPTION", "CRYPTO", "BOND", "EVENTCONTRACT"],
         default="EQUITY",
         help="Instrument type (default: EQUITY)"
     )

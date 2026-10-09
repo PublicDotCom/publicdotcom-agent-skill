@@ -7,7 +7,7 @@ metadata:
   source: https://github.com/PublicDotCom/publicdotcom-agent-skill
   category: "Finance"
   tags: ["investing", "stocks", "crypto", "options", "public", "finance"]
-  version: "1.1"
+  version: "1.2"
 ---
 
 # Public.com Account Manager
@@ -22,9 +22,9 @@ This skill allows users to interact with their Public.com brokerage account.
 - **Public.com account** — Create one at https://public.com/signup
 - **Public.com API key** — Get one at https://public.com/settings/v2/api
 
-The `publicdotcom-py` SDK is required, pinned to **0.1.23** (`scripts/config.py`). It will be **auto-installed** on first run — and auto-upgraded if an older version is present — or you can install manually:
+The `publicdotcom-py` SDK is required, pinned to **0.1.26** (`scripts/config.py`). It will be **auto-installed** on first run — and auto-upgraded if an older version is present — or you can install manually:
 ```bash
-pip install publicdotcom-py==0.1.23
+pip install publicdotcom-py==0.1.26
 ```
 
 ## Configuration
@@ -74,7 +74,7 @@ When the user asks to "get my portfolio", "show my holdings", or "what's in my a
 1. If `PUBLIC_COM_ACCOUNT_ID` is set, execute `python3 scripts/get_portfolio.py` (no arguments needed).
 2. If not set and you don't know the user's account ID, first run `get_accounts.py` to retrieve it.
 3. Execute `python3 scripts/get_portfolio.py --account-id [ACCOUNT_ID]`
-4. Report the portfolio summary (equity, buying power, cash and available-to-withdraw when present, positions) back to the user.
+4. Report the portfolio summary (equity, buying power, cash and available-to-withdraw when present, positions) back to the user. Positions are grouped as equities, options, crypto, event contracts, and other (bonds etc.).
 
 ### Get Orders
 When the user asks to "get my orders", "show my orders", "active orders", or "pending orders":
@@ -82,6 +82,35 @@ When the user asks to "get my orders", "show my orders", "active orders", or "pe
 2. If not set and you don't know the user's account ID, first run `get_accounts.py` to retrieve it.
 3. Execute `python3 scripts/get_orders.py --account-id [ACCOUNT_ID]`
 4. Report the active orders with their details (symbol, side, type, status, quantity, prices) back to the user.
+5. This lists only orders that are currently **working** (taken from the portfolio snapshot). For filled, cancelled, rejected or otherwise completed orders — or any question about *past* orders — use **Search Orders** below.
+
+### Search Orders
+When the user asks for "order history", "show my filled orders last week", "what did I buy this month", "list my cancelled orders", "all my AAPL orders", "did my sell go through yesterday", or anything about orders that are no longer active:
+
+**Scope:** searches every order created in the **last 30 days** (any status), returning at most **500**. Older orders are not searchable; for a live view of only the currently working orders use `get_orders.py`.
+
+**All filters are optional — combine them to narrow results:**
+- `--status`: NEW, PARTIALLY_FILLED, FILLED, CANCELLED, QUEUED_CANCELLED, REJECTED, PENDING_REPLACE, PENDING_CANCEL, EXPIRED, REPLACED
+- `--side`: BUY or SELL
+- `--symbol SYMBOL[:TYPE]`: one instrument; repeat the flag for several. TYPE defaults to EQUITY (e.g. `AAPL`, `BTC:CRYPTO`, `AAPL260918C00200000:OPTION`)
+- `--security-type`: EQUITY, OPTION, MULTI_LEG_INSTRUMENT, CRYPTO, ALT, TREASURY, BOND, INDEX, EVENTCONTRACT
+- `--open-close`: OPEN or CLOSE (options and short sales)
+- `--created-after` / `--created-before`: `YYYY-MM-DD` or an ISO 8601 timestamp (`2026-09-01T00:00:00Z`); bare dates and times without an offset are treated as UTC
+
+**Examples:**
+
+```bash
+python3 scripts/search_orders.py
+python3 scripts/search_orders.py --status FILLED --side BUY --symbol AAPL --created-after 2026-09-01
+python3 scripts/search_orders.py --status CANCELLED --security-type OPTION --created-after 2026-09-08T00:00:00Z --created-before 2026-09-15T00:00:00Z
+python3 scripts/search_orders.py --symbol AAPL --symbol BTC:CRYPTO
+```
+
+**Workflow:**
+1. Translate the user's request into filters. Relative phrases ("last week", "this month") become `--created-after` / `--created-before` timestamps; "filled" / "cancelled" become `--status`.
+2. Execute `python3 scripts/search_orders.py [FILTERS]` and summarize the matches (symbol, side, type, status, quantity or notional, filled quantity and average price, created / filled time, bracket ID).
+3. If the output warns that the result was capped at 500, tighten the window or add filters and run again.
+4. For the individual fills (trades), market session and fill / replace timestamps of one order, follow up with `get_order.py --order-id [ID]` (see **Get Order Status**).
 
 ### Get History
 When the user asks to "get my history", "show my transactions", "transaction history", "trade history", or wants to see past account activity:
@@ -155,7 +184,7 @@ python3 scripts/get_tax_lots.py --csv --out my_lots.csv
 ### Get Quotes
 When the user asks to "get a quote", "what's the price of", "check the price", or wants stock/crypto prices:
 
-**Format:** `SYMBOL` or `SYMBOL:TYPE` (TYPE = EQUITY, OPTION, CRYPTO or BOND; defaults to EQUITY)
+**Format:** `SYMBOL` or `SYMBOL:TYPE` (TYPE = EQUITY, OPTION, CRYPTO, BOND or EVENTCONTRACT; defaults to EQUITY)
 
 **Examples:**
 
@@ -199,7 +228,7 @@ python3 scripts/get_quotes.py AAPL --account-id YOUR_ACCOUNT_ID
 When the user asks to "list instruments", "what can I trade", "show available stocks", or wants to see tradeable instruments:
 
 **Optional parameters:**
-- `--type`: Instrument types to filter (EQUITY, OPTION, CRYPTO). Defaults to EQUITY.
+- `--type`: Instrument types to filter (EQUITY, OPTION, CRYPTO, EVENTCONTRACT). Defaults to EQUITY.
 - `--trading`: Trading status filter (BUY_AND_SELL, BUY_ONLY, SELL_ONLY, NOT_TRADABLE)
 - `--search`: Search by symbol or name
 - `--limit`: Limit number of results
@@ -243,7 +272,7 @@ When the user asks to "get instrument details", "show instrument info", "what ar
 - `--symbol`: The ticker symbol (e.g., AAPL, BTC)
 
 **Optional parameters:**
-- `--type`: Instrument type (EQUITY, OPTION, CRYPTO, BOND). Defaults to EQUITY.
+- `--type`: Instrument type (EQUITY, OPTION, CRYPTO, BOND, EVENTCONTRACT). Defaults to EQUITY.
 
 **Examples:**
 
@@ -608,7 +637,7 @@ When the user asks for "historical prices", "price history", "candles", "OHLC", 
 - `--period`: One of DAY, WEEK, MONTH, QUARTER, HALF_YEAR, YEAR, FIVE_YEARS, TEN_YEARS, ALL, YTD, SINCE_PURCHASE
 
 **Optional parameters:**
-- `--type`: EQUITY (default), CRYPTO, OPTION, or INDEX
+- `--type`: EQUITY (default), CRYPTO, OPTION, INDEX, or EVENTCONTRACT. For several contracts of one prediction-market event at once, use **Get Event Contract Bars** instead.
 - `--aggregation`: Bar size override (ONE_MINUTE, FIVE_MINUTES, TEN_MINUTES, FIFTEEN_MINUTES, THIRTY_MINUTES, ONE_HOUR, ONE_DAY, ONE_WEEK, ONE_MONTH, THREE_MONTHS, SIX_MONTHS, ONE_YEAR). If omitted, the server picks a sensible default for the period.
 - `--purchase-date`: Required when `--period SINCE_PURCHASE`. Format YYYY-MM-DD.
 - `--session-toggle`: DAY equity charts only. REGULAR_HOURS (9:30-16:00 ET), REGULAR_AND_EXTENDED_HOURS (4:00-20:00 ET, server default) or ALL_SESSIONS (midnight-to-midnight; adds the overnight 00:00-04:00 and 20:00-24:00 buckets).
@@ -650,6 +679,104 @@ python3 scripts/get_bars.py --symbol NEWCO --period YEAR --ipo-date 2026-03-15
 1. Parse the user's request for symbol, time window, and optional bar size.
 2. Execute: `python3 scripts/get_bars.py [OPTIONS]`
 3. Report the pre-market, regular-market, and after-hours bars (plus the overnight buckets when `ALL_SESSIONS` was used) along with the previous close and total gain/loss summary. If a leading fill is reported, tell the user the asset is younger than the requested period and how many flat bars precede the real data.
+
+### Event Contracts (Prediction Markets) — overview
+Event contracts are YES/NO contracts on real-world outcomes (e.g. "Will the Fed balance sheet be above $6.6T?"). Four read-only scripts cover discovery and charts. They do not need an account ID.
+
+Typical flow: **Get Event Categories** → **Get Event Summary** (pick an event) → **Get Event Details** (outcomes and YES/NO prices) → **Get Event Contract Bars** (price history).
+
+**Two different identifiers — do not mix them up:**
+- **Event symbol** (e.g. `KALSHI.KXBALANCESHEET-EO26`): returned by `get_event_summary.py`, taken by `get_event_details.py --event-symbol` and `get_event_summary.py --event-symbol`.
+- **Event id** (e.g. `KALSHI.KXBALANCESHEET-EO26-EVENT`): the `-EVENT` grouping id taken by `get_event_contract_bars.py --event-id`. It is the event symbol with `-EVENT` appended.
+- Contract symbols in `get_event_details.py` output look like `KALSHI.KXBALANCESHEET-EO26-6.6.Y` (`.Y` = YES, `.N` = NO); the bars script takes them with an `-EVENTCONTRACT` suffix.
+
+Prices are dollars from 0.00 to 1.00 and equal the implied probability (0.62 = 62%). A NO contract's price is roughly 1 minus the YES price.
+
+### Get Event Categories
+When the user asks "what prediction markets are there", "what event contracts can I trade", "list event categories", or wants to browse event contracts:
+
+**Example:**
+```bash
+python3 scripts/get_event_categories.py
+```
+
+**Workflow:**
+1. Execute `python3 scripts/get_event_categories.py`.
+2. Report the categories with their subcategories (and frequency filters, when shown).
+3. Pass a category to **Get Event Summary** with `--category`.
+
+### Get Event Summary
+When the user asks "what are the most popular prediction markets", "show event contracts about the economy", "which events resolve this week", "new event contracts", or wants to find events:
+
+**All parameters are optional:**
+- `--sort`: VOLUME (default), EXPIRATION, or RECENTLY_ADDED
+- `--category` / `--subcategory`: from **Get Event Categories**
+- `--event-symbol`: only these events; repeat or comma-separate
+- `--frequency`: ALL, ONCE, FIFTEEN_MINUTES, ONE_HOUR, ONE_DAY, ONE_WEEK, ONE_MONTH, ONE_YEAR; repeat for several
+- `--resolution-start` / `--resolution-end`: only events resolving in this window (`YYYY-MM-DD` or ISO 8601; naive = UTC)
+- `--include-resolved` / `--no-include-resolved`: include or exclude already-resolved events (server default when omitted)
+- `--created-within-days N`: only events created in the last N days
+- `--next-token`: fetch the next page (the output prints the token when more results exist)
+
+Up to 100 events per page.
+
+**Examples:**
+```bash
+python3 scripts/get_event_summary.py
+python3 scripts/get_event_summary.py --sort RECENTLY_ADDED --category Economics
+python3 scripts/get_event_summary.py --frequency ONE_DAY --resolution-end 2026-12-31
+python3 scripts/get_event_summary.py --event-symbol KALSHI.KXBALANCESHEET-EO26
+python3 scripts/get_event_summary.py --next-token <TOKEN>
+```
+
+**Workflow:**
+1. Translate the request into filters ("most traded" → default VOLUME sort, "ending soon" → `--sort EXPIRATION`, "new" → `--sort RECENTLY_ADDED`).
+2. Execute `python3 scripts/get_event_summary.py [OPTIONS]`.
+3. Report each event's title, event symbol, category, volume, resolution time and RESOLVED / HALTED flags.
+4. If the user wants more, re-run with the same flags plus `--next-token`.
+5. For outcomes and prices, follow up with **Get Event Details**.
+
+### Get Event Details
+When the user asks "what are the odds on X", "show the outcomes for this event", "how much is the YES contract", "what are the rules for this market", or wants detail on one event:
+
+**Required parameters:**
+- `--event-symbol`: the event symbol from **Get Event Summary** (e.g. `KALSHI.KXBALANCESHEET-EO26`) — not the `-EVENT` id
+
+**Optional parameters:**
+- `--no-all-outcomes`: return only a short list of up to 8 outcomes (default is every outcome). The header always shows the total outcome count.
+
+**Example:**
+```bash
+python3 scripts/get_event_details.py --event-symbol KALSHI.KXBALANCESHEET-EO26
+```
+
+**Workflow:**
+1. Execute `python3 scripts/get_event_details.py --event-symbol [EVENT_SYMBOL]`.
+2. Report the event (title, category, exchange, status, volume) and, per outcome: title, state, trading mode, settlement, the YES/NO contracts with bid / ask / last (shown as dollars and implied %), and the rules.
+3. Mention the CFTC contract terms link and resolution sources when the user asks how the market settles.
+4. An unknown event symbol returns a validation error (code 7004) — re-check the symbol with **Get Event Summary**.
+
+### Get Event Contract Bars
+When the user asks for "the price history of this prediction market", "chart the odds over the last week", "how have the odds moved", or wants historical prices for event contracts:
+
+**Required parameters:**
+- `--event-id`: the `-EVENT` grouping id (event symbol + `-EVENT`, e.g. `KALSHI.KXBALANCESHEET-EO26-EVENT`)
+- `--period`: DAY, WEEK, MONTH, or ALL (measured back from now, or from the event's close once it has stopped trading)
+- `--symbol`: an `-EVENTCONTRACT` symbol of the event (e.g. `KALSHI.KXBALANCESHEET-EO26-6.6.Y-EVENTCONTRACT`); repeat or comma-separate, up to 8
+
+**Examples:**
+```bash
+python3 scripts/get_event_contract_bars.py --event-id KALSHI.KXBALANCESHEET-EO26-EVENT --period WEEK \
+  --symbol KALSHI.KXBALANCESHEET-EO26-6.6.Y-EVENTCONTRACT
+python3 scripts/get_event_contract_bars.py --event-id KALSHI.KXBALANCESHEET-EO26-EVENT --period ALL \
+  --symbol KALSHI.KXBALANCESHEET-EO26-6.6.Y-EVENTCONTRACT,KALSHI.KXBALANCESHEET-EO26-6.6.N-EVENTCONTRACT
+```
+
+**Workflow:**
+1. Get the contract symbols from **Get Event Details** (append `-EVENTCONTRACT`) and the event id (append `-EVENT` to the event symbol).
+2. Execute `python3 scripts/get_event_contract_bars.py --event-id [EVENT_ID] --period [PERIOD] --symbol [SYMBOL]...`.
+3. Report each contract's current price, previous close and change over the period (as implied %), and summarize the bars. Charts can start at different times — compare them by timestamp, not position.
+4. Symbols with no data are listed at the end; they are unknown, have no candles, or had no price in the period.
 
 ### Preflight Spread
 When the user wants to estimate the cost of a vertical option spread before placing it:
@@ -778,11 +905,15 @@ When the user asks to "check order status", "is my order filled", "what happened
 python3 scripts/get_order.py --order-id 345d3e58-5ba3-401a-ac89-1b756332cc94
 ```
 
+Also use it when the user asks "what trades filled this order", "when did order X fill", "at what prices did my order execute", or "which session was this order placed in".
+
 **Workflow:**
 1. Execute: `python3 scripts/get_order.py --order-id [ID]`
 2. Report the order's status, filled quantity, average price, and reject reason (if any).
 3. Multi-leg orders also include a per-leg breakdown.
 4. Bracket orders show a **Bracket ID** (the entry order's ID). Use it to relate the entry to its take-profit / stop-loss legs in `get_orders.py`.
+5. The output also includes the **Session** (REGULAR, REST_OF_DAY or TWENTY_FOUR_HOURS — as reported by the API; these names differ from the `--session` values used when placing an order), the **Timeline** (created, filled, replaced, closed, last modified) and each **Trade**: side, quantity, symbol, execution price, time and trade ID. Partial fills show up as several trades.
+6. Only orders created within the **last 30 days** can be looked up — an older order returns a not-found error. To find an order ID first (e.g. "my AAPL buy from Tuesday"), run **Search Orders**.
 
 ### Wait For Fill
 When the user wants to "wait until my order fills", "block until filled", or wants the agent to monitor an order through to a terminal state before doing the next step:
@@ -921,7 +1052,7 @@ python3 scripts/flatten_and_short.py --symbol TSLA --short-quantity 10
 When the user asks to "watch the price", "monitor a stock", "alert me when X moves", or wants a real-time stream of quote changes:
 
 **Required parameters:**
-- One or more instruments: `SYMBOL` or `SYMBOL:TYPE` (TYPE = EQUITY | OPTION | CRYPTO, defaults to EQUITY)
+- One or more instruments: `SYMBOL` or `SYMBOL:TYPE` (TYPE = EQUITY | OPTION | CRYPTO | EVENTCONTRACT, defaults to EQUITY)
 
 **Optional parameters:**
 - `--poll-seconds`: SDK polling interval (0.1-60, default 2.0)

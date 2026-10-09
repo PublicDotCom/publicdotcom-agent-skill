@@ -24,9 +24,10 @@ def parse_instrument(spec):
         "EQUITY": InstrumentType.EQUITY,
         "OPTION": InstrumentType.OPTION,
         "CRYPTO": InstrumentType.CRYPTO,
+        "EVENTCONTRACT": InstrumentType.EVENTCONTRACT,
     }
     if type_str not in type_map:
-        raise ValueError(f"Invalid instrument type '{type_str}'. Must be EQUITY, OPTION, or CRYPTO.")
+        raise ValueError(f"Invalid instrument type '{type_str}'. Must be EQUITY, OPTION, CRYPTO, or EVENTCONTRACT.")
     return OrderInstrument(symbol=symbol, type=type_map[type_str])
 
 
@@ -108,7 +109,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Stream real-time price changes for one or more instruments",
         epilog=(
-            "Instrument format: SYMBOL or SYMBOL:TYPE (TYPE = EQUITY|OPTION|CRYPTO, default EQUITY)\n\n"
+            "Instrument format: SYMBOL or SYMBOL:TYPE (TYPE = EQUITY|OPTION|CRYPTO|EVENTCONTRACT, default EQUITY)\n\n"
             "Examples:\n"
             "  python3 watch_prices.py AAPL\n"
             "  python3 watch_prices.py AAPL GOOGL MSFT\n"

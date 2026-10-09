@@ -63,13 +63,19 @@ def get_portfolio(account_id=None):
             equities = [p for p in portfolio.positions if p.instrument.type.value == "EQUITY"]
             options = [p for p in portfolio.positions if p.instrument.type.value == "OPTION"]
             crypto = [p for p in portfolio.positions if p.instrument.type.value == "CRYPTO"]
+            event_contracts = [p for p in portfolio.positions if p.instrument.type.value == "EVENTCONTRACT"]
+            grouped = {"EQUITY", "OPTION", "CRYPTO", "EVENTCONTRACT"}
+            other = [p for p in portfolio.positions if p.instrument.type.value not in grouped]
 
             def print_position(pos):
                 inst = pos.instrument
                 print(f"\n  {inst.name} ({inst.symbol})")
                 print(f"    Quantity: {pos.quantity}")
-                print(f"    Current Value: ${pos.current_value:,.2f} ({pos.percent_of_portfolio:.2f}% of portfolio)")
-                print(f"    Last Price: ${pos.last_price.last_price:,.2f}")
+                if pos.current_value is not None:
+                    pct = f" ({pos.percent_of_portfolio:.2f}% of portfolio)" if pos.percent_of_portfolio is not None else ""
+                    print(f"    Current Value: ${pos.current_value:,.2f}{pct}")
+                if pos.last_price is not None and pos.last_price.last_price is not None:
+                    print(f"    Last Price: ${pos.last_price.last_price:,.2f}")
 
                 # Position daily gain
                 if pos.position_daily_gain:
@@ -100,6 +106,18 @@ def get_portfolio(account_id=None):
                 print("\n🪙 CRYPTO")
                 print("-" * 60)
                 for pos in crypto:
+                    print_position(pos)
+
+            if event_contracts:
+                print("\n🎯 EVENT CONTRACTS")
+                print("-" * 60)
+                for pos in event_contracts:
+                    print_position(pos)
+
+            if other:
+                print("\n📦 OTHER")
+                print("-" * 60)
+                for pos in other:
                     print_position(pos)
 
         print("\n" + "=" * 60)

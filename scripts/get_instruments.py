@@ -17,7 +17,7 @@ def get_instruments(instrument_types=None, trading_filter=None, search=None, lim
     Get all available instruments with optional filtering.
 
     Args:
-        instrument_types: List of instrument types to filter (EQUITY, OPTION, CRYPTO)
+        instrument_types: List of instrument types to filter (EQUITY, OPTION, CRYPTO, EVENTCONTRACT)
         trading_filter: List of trading statuses to filter (BUY_AND_SELL, BUY_ONLY, SELL_ONLY, NOT_TRADABLE)
         search: Optional search string to filter by symbol or name
         limit: Optional limit on number of results to display
@@ -36,6 +36,7 @@ def get_instruments(instrument_types=None, trading_filter=None, search=None, lim
         "EQUITY": InstrumentType.EQUITY,
         "OPTION": InstrumentType.OPTION,
         "CRYPTO": InstrumentType.CRYPTO,
+        "EVENTCONTRACT": InstrumentType.EVENTCONTRACT,
     }
 
     trading_map = {
@@ -142,7 +143,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--type",
         nargs="+",
-        choices=["EQUITY", "OPTION", "CRYPTO"],
+        choices=["EQUITY", "OPTION", "CRYPTO", "EVENTCONTRACT"],
         default=["EQUITY"],
         help="Instrument type(s) to filter (default: EQUITY)"
     )

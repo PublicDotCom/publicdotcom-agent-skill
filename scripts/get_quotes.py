@@ -36,6 +36,7 @@ def get_quotes(symbols, account_id=None):
         "OPTION": InstrumentType.OPTION,
         "CRYPTO": InstrumentType.CRYPTO,
         "BOND": InstrumentType.BOND,
+        "EVENTCONTRACT": InstrumentType.EVENTCONTRACT,
     }
 
     try:
@@ -120,8 +121,8 @@ def parse_symbol_arg(arg):
         symbol = arg.upper()
         inst_type = "EQUITY"
 
-    if inst_type not in ["EQUITY", "OPTION", "CRYPTO", "BOND"]:
-        print(f"Error: Invalid instrument type '{inst_type}'. Must be EQUITY, OPTION, CRYPTO, or BOND.")
+    if inst_type not in ["EQUITY", "OPTION", "CRYPTO", "BOND", "EVENTCONTRACT"]:
+        print(f"Error: Invalid instrument type '{inst_type}'. Must be EQUITY, OPTION, CRYPTO, BOND, or EVENTCONTRACT.")
         sys.exit(1)
 
     return (symbol, inst_type)
@@ -141,7 +142,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "symbols",
         nargs="+",
-        help="Symbol(s) to quote in format SYMBOL or SYMBOL:TYPE (TYPE = EQUITY, OPTION, CRYPTO or BOND; defaults to EQUITY)"
+        help="Symbol(s) to quote in format SYMBOL or SYMBOL:TYPE (TYPE = EQUITY, OPTION, CRYPTO, BOND or EVENTCONTRACT; defaults to EQUITY)"
     )
     parser.add_argument(
         "--account-id",
