@@ -30,7 +30,8 @@ def get_bars(
         symbol: Ticker symbol (e.g. "AAPL", "BTC", "AAPL260320C00280000")
         period: One of BarPeriod values (DAY, WEEK, MONTH, QUARTER, HALF_YEAR,
                 YEAR, FIVE_YEARS, YTD, SINCE_PURCHASE)
-        instrument_type: EQUITY, CRYPTO, OPTION, or INDEX. Defaults to EQUITY.
+        instrument_type: EQUITY, CRYPTO, OPTION, INDEX, or EVENTCONTRACT. Defaults to EQUITY.
+                For several contracts of one prediction-market event, use get_event_contract_bars.py.
         aggregation: Optional bar size override (ONE_MINUTE, FIVE_MINUTES, ...)
         purchase_date: Required when period=SINCE_PURCHASE. Format YYYY-MM-DD.
         session_toggle: DAY equity charts only — REGULAR_HOURS, REGULAR_AND_EXTENDED_HOURS
@@ -53,6 +54,7 @@ def get_bars(
         "CRYPTO": InstrumentType.CRYPTO,
         "OPTION": InstrumentType.OPTION,
         "INDEX": InstrumentType.INDEX,
+        "EVENTCONTRACT": InstrumentType.EVENTCONTRACT,
     }
 
     if period not in period_map:
@@ -64,7 +66,7 @@ def get_bars(
         sys.exit(1)
 
     if instrument_type not in instrument_type_map:
-        print(f"Error: Invalid instrument type '{instrument_type}'. Must be EQUITY, CRYPTO, OPTION, or INDEX.")
+        print(f"Error: Invalid instrument type '{instrument_type}'. Must be EQUITY, CRYPTO, OPTION, INDEX, or EVENTCONTRACT.")
         sys.exit(1)
 
     if period == "SINCE_PURCHASE" and not purchase_date:
@@ -163,8 +165,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--type",
         default="EQUITY",
-        choices=["EQUITY", "CRYPTO", "OPTION", "INDEX"],
-        help="Instrument type (default: EQUITY)",
+        choices=["EQUITY", "CRYPTO", "OPTION", "INDEX", "EVENTCONTRACT"],
+        help="Instrument type (default: EQUITY). For up to 8 contracts of one event in a single call, "
+             "use get_event_contract_bars.py",
     )
     parser.add_argument(
         "--aggregation",
