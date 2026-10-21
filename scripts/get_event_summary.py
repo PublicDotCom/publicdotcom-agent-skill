@@ -118,6 +118,8 @@ def get_event_summary(request):
             status = f"  [{', '.join(flags)}]" if flags else ""
             print(f"\n  🎯 {event.title or '(untitled)'}{status}")
             print(f"     Event Symbol: {event.event_symbol}")
+            if event.series:
+                print(f"     Series:       {event.series}")
             category = event.category or "n/a"
             if event.subcategories:
                 category += f" / {', '.join(event.subcategories)}"
@@ -125,11 +127,13 @@ def get_event_summary(request):
             volume = f"{event.volume:,}" if event.volume is not None else "n/a"
             print(f"     Volume:       {volume}  |  Resolves {_fmt_ts(event.resolution_time)}")
             if event.symbols:
+                # Related instruments (e.g. BTC-CRYPTO, IBIT), not the event's contracts.
                 shown = ", ".join(event.symbols[:4])
                 more = f" (+{len(event.symbols) - 4} more)" if len(event.symbols) > 4 else ""
-                print(f"     Contracts:    {shown}{more}")
+                print(f"     Related:      {shown}{more}")
 
         print("\n  Next: get_event_details.py --event-symbol <EVENT SYMBOL> for outcomes and YES/NO prices.")
+        print("  Recurring market (e.g. 15-minute windows): get_current_event.py --series <SERIES>.")
         if page.next_token:
             print(f"  More results: re-run with the same flags plus --next-token {page.next_token}")
         print("\n" + "=" * 78)

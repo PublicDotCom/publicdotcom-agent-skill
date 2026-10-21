@@ -9,10 +9,10 @@ import sys
 
 # The one place the SDK pin lives. requirements.txt and README.md mirror it.
 SDK_PACKAGE = "publicdotcom-py"
-SDK_VERSION = "0.1.26"
+SDK_VERSION = "0.1.27"
 
 # Skill version. Mirrored in the SKILL.md frontmatter (`metadata.version`).
-SKILL_VERSION = "1.2"
+SKILL_VERSION = "1.3"
 USER_AGENT = f"agent-skill/{SKILL_VERSION}"
 
 

@@ -1,5 +1,6 @@
 import argparse
 import sys
+from decimal import Decimal
 
 from config import get_api_secret, get_account_id, create_client
 
@@ -8,10 +9,24 @@ def _fmt_ts(value):
     return value.strftime("%Y-%m-%d %H:%M %Z").strip() if value else None
 
 
+def _fmt_left(seconds):
+    minutes, secs = divmod(int(seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+    if days:
+        return f"{days}d {hours}h"
+    if hours:
+        return f"{hours}h {minutes:02d}m"
+    return f"{minutes}m {secs:02d}s"
+
+
 def _fmt_price(value):
     """Contract prices are dollars 0.00-1.00 (= implied probability); show both."""
     if value is None:
         return "—"
+    if value != value.quantize(Decimal("0.01")):
+        # Quotes can carry tenths of a cent; don't round them away.
+        return f"${value:.3f} ({value * 100:.1f}%)"
     return f"${value:.2f} ({value * 100:.0f}%)"
 
 
@@ -31,6 +46,8 @@ def get_event_details(event_symbol, all_outcomes=True):
         print(f"EVENT {event.event_symbol}")
         print("=" * 78)
         print(f"\n  Title:     {event.title or 'n/a'}")
+        if event.series:
+            print(f"  Series:    {event.series}")
         category = event.category or "n/a"
         if event.subcategories:
             category += f" / {', '.join(event.subcategories)}"
@@ -64,6 +81,12 @@ def get_event_details(event_symbol, all_outcomes=True):
                 meta.append(f"Volume {outcome.volume:,}")
             if meta:
                 print(f"    {'  |  '.join(meta)}")
+            live = [f"Tradable {'yes' if outcome.is_tradable else 'no'}"]
+            if outcome.seconds_left:
+                live.append(f"{_fmt_left(outcome.seconds_left)} until close")
+            if outcome.winner is not None:
+                live.append(f"Winner {outcome.winner.symbol}")
+            print(f"    {'  |  '.join(live)}")
             tl = outcome.timeline
             if tl is not None:
                 times = [
@@ -97,7 +120,10 @@ def get_event_details(event_symbol, all_outcomes=True):
             for prohibition in cftc.prohibitions:
                 print(f"    Prohibited: {prohibition}")
 
-        print("\n  Chart prices: get_event_contract_bars.py --event-id <ID>-EVENT --period WEEK "
+        print("\n  Buy a side:   buy_event_contract.py --event-symbol "
+              f"{event.event_symbol} --contract YES|NO"
+              + (" --outcome-id <OUTCOME ID>" if len(event.outcomes) > 1 else ""))
+        print("  Chart prices: get_event_contract_bars.py --event-id <ID>-EVENT --period WEEK "
               "--symbol <CONTRACT SYMBOL>-EVENTCONTRACT")
         print("\n" + "=" * 78)
 
