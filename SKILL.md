@@ -7,7 +7,7 @@ metadata:
   source: https://github.com/PublicDotCom/publicdotcom-agent-skill
   category: "Finance"
   tags: ["investing", "stocks", "crypto", "options", "public", "finance"]
-  version: "1.2"
+  version: "1.3"
 ---
 
 # Public.com Account Manager
@@ -22,9 +22,9 @@ This skill allows users to interact with their Public.com brokerage account.
 - **Public.com account** — Create one at https://public.com/signup
 - **Public.com API key** — Get one at https://public.com/settings/v2/api
 
-The `publicdotcom-py` SDK is required, pinned to **0.1.26** (`scripts/config.py`). It will be **auto-installed** on first run — and auto-upgraded if an older version is present — or you can install manually:
+The `publicdotcom-py` SDK is required, pinned to **0.1.27** (`scripts/config.py`). It will be **auto-installed** on first run — and auto-upgraded if an older version is present — or you can install manually:
 ```bash
-pip install publicdotcom-py==0.1.26
+pip install publicdotcom-py==0.1.27
 ```
 
 ## Configuration
@@ -681,16 +681,19 @@ python3 scripts/get_bars.py --symbol NEWCO --period YEAR --ipo-date 2026-03-15
 3. Report the pre-market, regular-market, and after-hours bars (plus the overnight buckets when `ALL_SESSIONS` was used) along with the previous close and total gain/loss summary. If a leading fill is reported, tell the user the asset is younger than the requested period and how many flat bars precede the real data.
 
 ### Event Contracts (Prediction Markets) — overview
-Event contracts are YES/NO contracts on real-world outcomes (e.g. "Will the Fed balance sheet be above $6.6T?"). Four read-only scripts cover discovery and charts. They do not need an account ID.
+Event contracts are YES/NO contracts on real-world outcomes (e.g. "Will the Fed balance sheet be above $6.6T?"). Five read-only scripts cover discovery and charts and do not need an account ID; three more preflight, buy, and follow a contract to settlement (**Preflight Event Contract**, **Buy Event Contract**, **Wait For Settlement**).
 
-Typical flow: **Get Event Categories** → **Get Event Summary** (pick an event) → **Get Event Details** (outcomes and YES/NO prices) → **Get Event Contract Bars** (price history).
+Typical flow: **Get Event Categories** → **Get Event Summary** (pick an event) → **Get Event Details** (outcomes and YES/NO prices) → **Get Event Contract Bars** (price history). For a recurring market such as a 15-minute "Up or Down" window, start from **Get Current Event** instead — see **Trade a 15-Minute Market**.
 
 **Two different identifiers — do not mix them up:**
 - **Event symbol** (e.g. `KALSHI.KXBALANCESHEET-EO26`): returned by `get_event_summary.py`, taken by `get_event_details.py --event-symbol` and `get_event_summary.py --event-symbol`.
 - **Event id** (e.g. `KALSHI.KXBALANCESHEET-EO26-EVENT`): the `-EVENT` grouping id taken by `get_event_contract_bars.py --event-id`. It is the event symbol with `-EVENT` appended.
-- Contract symbols in `get_event_details.py` output look like `KALSHI.KXBALANCESHEET-EO26-6.6.Y` (`.Y` = YES, `.N` = NO); the bars script takes them with an `-EVENTCONTRACT` suffix.
+- Contract symbols in `get_event_details.py` output look like `KALSHI.KXBALANCESHEET-EO26-6.6.Y` (`.Y` = YES, `.N` = NO); the bars script takes them with an `-EVENTCONTRACT` suffix, orders take them without it.
+- **Outcome ids** (e.g. `KXBALANCESHEET-EO26-6.6`) carry **no** exchange prefix.
+- **Series** (e.g. `KXBTC15M`): the ticker between the exchange prefix and the first `-` of an event symbol. Every window of a recurring market shares it; `get_current_event.py --series` takes it.
+- The "Related" symbols on an event in `get_event_summary.py` are related instruments (e.g. `BTC-CRYPTO`), **not** the event's contracts — those come from **Get Event Details**.
 
-Prices are dollars from 0.00 to 1.00 and equal the implied probability (0.62 = 62%). A NO contract's price is roughly 1 minus the YES price.
+Prices are dollars from 0.00 to 1.00 and equal the implied probability (0.62 = 62%). A NO contract's price is roughly 1 minus the YES price. A winning contract pays $1.00.
 
 ### Get Event Categories
 When the user asks "what prediction markets are there", "what event contracts can I trade", "list event categories", or wants to browse event contracts:
@@ -732,7 +735,7 @@ python3 scripts/get_event_summary.py --next-token <TOKEN>
 **Workflow:**
 1. Translate the request into filters ("most traded" → default VOLUME sort, "ending soon" → `--sort EXPIRATION`, "new" → `--sort RECENTLY_ADDED`).
 2. Execute `python3 scripts/get_event_summary.py [OPTIONS]`.
-3. Report each event's title, event symbol, category, volume, resolution time and RESOLVED / HALTED flags.
+3. Report each event's title, event symbol, series, category, volume, resolution time and RESOLVED / HALTED flags.
 4. If the user wants more, re-run with the same flags plus `--next-token`.
 5. For outcomes and prices, follow up with **Get Event Details**.
 
@@ -752,9 +755,10 @@ python3 scripts/get_event_details.py --event-symbol KALSHI.KXBALANCESHEET-EO26
 
 **Workflow:**
 1. Execute `python3 scripts/get_event_details.py --event-symbol [EVENT_SYMBOL]`.
-2. Report the event (title, category, exchange, status, volume) and, per outcome: title, state, trading mode, settlement, the YES/NO contracts with bid / ask / last (shown as dollars and implied %), and the rules.
+2. Report the event (title, series, category, exchange, status, volume) and, per outcome: title, state, trading mode, whether it is tradable right now and the time left until close, settlement and the winning contract once settled, the YES/NO contracts with bid / ask / last (shown as dollars and implied %), and the rules.
 3. Mention the CFTC contract terms link and resolution sources when the user asks how the market settles.
 4. An unknown event symbol returns a validation error (code 7004) — re-check the symbol with **Get Event Summary**.
+5. "Tradable" needs state OPEN, trading BUY_AND_SELL and a close time still in the future — an outcome can report STATE_OPEN after it has closed, so go by "Tradable", not the state.
 
 ### Get Event Contract Bars
 When the user asks for "the price history of this prediction market", "chart the odds over the last week", "how have the odds moved", or wants historical prices for event contracts:
@@ -777,6 +781,117 @@ python3 scripts/get_event_contract_bars.py --event-id KALSHI.KXBALANCESHEET-EO26
 2. Execute `python3 scripts/get_event_contract_bars.py --event-id [EVENT_ID] --period [PERIOD] --symbol [SYMBOL]...`.
 3. Report each contract's current price, previous close and change over the period (as implied %), and summarize the bars. Charts can start at different times — compare them by timestamp, not position.
 4. Symbols with no data are listed at the end; they are unknown, have no candles, or had no price in the period.
+
+### Get Current Event
+When the user asks "what's the current 15-minute Bitcoin market", "find the open BTC up-or-down window", "what's trading right now in KXBTC15M", or names a recurring prediction-market series:
+
+**Required parameters:**
+- `--series`: the series ticker, e.g. `KXBTC15M` (shown as "Series" by **Get Event Summary** / **Get Event Details**)
+
+**Optional parameters:**
+- `--frequency`: how often the series recurs — FIFTEEN_MINUTES (default), ONE_HOUR, ONE_DAY, ONE_WEEK, ONE_MONTH, ONE_YEAR, ONCE, ALL
+- `--category` / `--subcategory`: narrow the search (e.g. `Crypto` / `BTC`)
+- `--wait`: poll until the series has an open event instead of exiting when it has none (between windows the next one is listed a minute or two after the previous closes)
+- `--timeout`: with `--wait`, max seconds to wait (default 900)
+- `--poll-seconds`: with `--wait`, seconds between checks (default 30)
+- `--no-details`: skip fetching the event's outcomes and YES/NO prices
+
+**Exit codes:** 0 = found, 1 = no open event (without `--wait`) or error, 2 = `--wait` timed out.
+
+**Examples:**
+```bash
+python3 scripts/get_current_event.py --series KXBTC15M
+python3 scripts/get_current_event.py --series KXBTC15M --wait --timeout 300
+```
+
+**Workflow:**
+1. If the user names a market but not its series, find an event with **Get Event Summary** (e.g. `--frequency FIFTEEN_MINUTES --category Crypto`) and read its Series line.
+2. Execute `python3 scripts/get_current_event.py --series [SERIES]`.
+3. Report the event symbol, when it resolves and how long is left, and the YES/NO bid/ask. The window picked is the open one that closes soonest; windows already past their close (which the API still lists for a few minutes) are skipped.
+
+### Preflight Event Contract
+When the user asks "what would it cost to buy YES on this market", "preflight a prediction market buy", or wants the cost of an event-contract buy before placing it:
+
+**Choose the contract one of two ways:**
+- `--event-symbol` + `--contract YES|NO` (+ `--outcome-id` for an event with more than one outcome): the script looks up the contract and, unless `--limit-price` is given, prices the order at its current **ask rounded up to a whole cent**.
+- `--symbol`: a contract symbol ending in `.Y` / `.N` (e.g. `KALSHI.KXBTC15M-26OCT201200-00.Y`). **`--limit-price` is then required.**
+
+**Optional parameters:**
+- `--quantity`: number of contracts (default 1; at most 2 decimal places)
+- `--limit-price`: most to pay per contract, whole cents from 0.01 to 0.99
+- `--account-id`: uses `PUBLIC_COM_ACCOUNT_ID` if omitted
+
+The order is always a **BUY**, **LIMIT**, **DAY**.
+
+**Examples:**
+```bash
+python3 scripts/preflight_event_contract.py --event-symbol KALSHI.KXBTC15M-26OCT201200 --contract YES
+python3 scripts/preflight_event_contract.py --event-symbol KALSHI.KXBALANCESHEET-EO26 --outcome-id KXBALANCESHEET-EO26-6.6 --contract NO --quantity 5
+python3 scripts/preflight_event_contract.py --symbol KALSHI.KXBTC15M-26OCT201200-00.Y --limit-price 0.55
+```
+
+**Workflow:**
+1. Execute `python3 scripts/preflight_event_contract.py [OPTIONS]`.
+2. Report the limit price (and implied %), the estimated cost (includes commission and exchange fee), the buying-power requirement, and the payout if it wins ($1.00 per contract).
+3. If the output warns the outcome is not tradable, tell the user before going further.
+4. If the user wants to proceed, run **Buy Event Contract** with the same flags.
+
+### Buy Event Contract
+When the user asks to "buy YES", "buy NO", "bet on this market", "buy the up side of the 15-minute window", or otherwise to buy an event contract:
+
+**Parameters:** the same as **Preflight Event Contract** (`--event-symbol` + `--contract` [+ `--outcome-id`], or `--symbol` + `--limit-price`; `--quantity`, `--limit-price`, `--account-id`).
+
+With `--event-symbol` the script refuses to place the order when the outcome is not tradable (closed, halted, or past its close time).
+
+**Examples:**
+```bash
+python3 scripts/buy_event_contract.py --event-symbol KALSHI.KXBTC15M-26OCT201200 --contract YES
+python3 scripts/buy_event_contract.py --event-symbol KALSHI.KXBTC15M-26OCT201200 --contract NO --quantity 3 --limit-price 0.40
+python3 scripts/buy_event_contract.py --symbol KALSHI.KXBTC15M-26OCT201200-00.Y --limit-price 0.55
+```
+
+**Workflow:**
+1. Gather the event, side (YES/NO), quantity and — if the user has one in mind — the limit price. Preflight first with **Preflight Event Contract**.
+2. Confirm the order details with the user before executing (contract, quantity, limit price, cost). For a 15-minute window also mention the time left until close.
+3. Execute: `python3 scripts/buy_event_contract.py [OPTIONS]`
+4. Report the order ID. Placement is asynchronous: use `wait_for_fill.py --order-id <id>` to follow the fill, and **Wait For Settlement** to learn whether it paid out.
+5. The script only buys; the skill has no script to sell an event contract before it settles. A DAY limit that has not filled can be cancelled with **Cancel Order**.
+
+### Wait For Settlement
+When the user asks "did my prediction market win", "wait until the window settles", "tell me the result of this market", or wants to block until an event contract outcome settles:
+
+**Required parameters:**
+- `--event-symbol`: the event, e.g. `KALSHI.KXBTC15M-26OCT201200`
+
+**Optional parameters:**
+- `--outcome-id`: the outcome to watch; may be omitted for a single-outcome event (such as a 15-minute window)
+- `--contract`: a contract symbol the user holds (e.g. `...-00.Y`); the script then reports WON or LOST
+- `--timeout`: max seconds to wait (default 1800)
+- `--poll-seconds`: polling interval (default 20)
+
+**Exit codes:** 0 = settled, 1 = error (e.g. a multi-outcome event without `--outcome-id`), 2 = timed out.
+
+**Examples:**
+```bash
+python3 scripts/wait_for_settlement.py --event-symbol KALSHI.KXBTC15M-26OCT201200 --contract KALSHI.KXBTC15M-26OCT201200-00.Y
+python3 scripts/wait_for_settlement.py --event-symbol KALSHI.KXBALANCESHEET-EO26 --outcome-id KXBALANCESHEET-EO26-6.6 --timeout 60
+```
+
+**Workflow:**
+1. After **Buy Event Contract**, run the "Await result" command it prints (or build it from the event symbol and contract).
+2. Report how the outcome settled (YES / NO / OTHER), the winning contract, and — with `--contract` — whether the user's contract won. A winner of "none" means it settled some other way than YES/NO.
+3. A 15-minute window settles a few minutes after it closes; long-dated events can take far longer than the timeout — for those, check later with **Get Event Details** instead of waiting.
+
+### Trade a 15-Minute Market
+When the user wants to "trade the 15-minute Bitcoin market", "buy YES on the next BTC window and tell me if it won", or automate recurring prediction-market trades:
+
+1. **Find the window:** `python3 scripts/get_current_event.py --series KXBTC15M` (add `--wait` between windows). Note the event symbol, the time left, and the YES/NO asks.
+2. **Price it:** `python3 scripts/preflight_event_contract.py --event-symbol [EVENT_SYMBOL] --contract YES|NO [--quantity N] [--limit-price P]`.
+3. **Confirm** contract, quantity, limit price, cost and time left with the user. Do not place an order with less time left than it takes to confirm — re-run step 1 for the next window instead.
+4. **Buy:** `python3 scripts/buy_event_contract.py` with the same flags. Report the order ID.
+5. **Fill:** `python3 scripts/wait_for_fill.py --order-id [ORDER_ID] --timeout 120`. An unfilled DAY limit can be cancelled with `cancel_order.py`.
+6. **Result:** `python3 scripts/wait_for_settlement.py --event-symbol [EVENT_SYMBOL] --contract [CONTRACT_SYMBOL]`, then report WON / LOST.
+7. For a repeating strategy, loop from step 1; each window has a new event symbol but the same series.
 
 ### Preflight Spread
 When the user wants to estimate the cost of a vertical option spread before placing it:

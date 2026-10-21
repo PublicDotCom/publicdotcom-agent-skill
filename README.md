@@ -11,6 +11,7 @@ This is an agent skill for interacting with your Public.com brokerage account. Y
 - List option chains, expirations, and greeks; quote a multi-leg strategy as a whole
 - Search the bonds hub with filters and pull full details or live quotes for a bond
 - Browse event contracts (prediction markets) by category, see an event's outcomes and YES/NO prices, and chart how the odds have moved
+- Trade recurring prediction markets such as 15-minute "Up or Down" windows: find the current window, preflight and buy a YES/NO contract at the ask, and wait for it to settle
 - Preflight and place equity, crypto, and options orders (including shorts and bracket orders with take-profit / stop-loss exits)
 - Preflight and place vertical spreads and arbitrary 2-6 leg options strategies (iron condors, butterflies, straddles, etc.)
 - Modify open orders (cancel-and-replace), cancel orders, wait for fills, and check order status
@@ -25,7 +26,7 @@ We recommend running this skill in as isolated of an environment as possible. If
 
 There are a few prerequisites needed to get started:
 
-- **Python 3.9+** and **pip** — Required to run this skill. The skill's scripts use the `publicdotcom-py` SDK (pinned to `0.1.26` in `scripts/config.py` and `requirements.txt`), which is auto-installed — or upgraded from an older version — on first run.
+- **Python 3.9+** and **pip** — Required to run this skill. The skill's scripts use the `publicdotcom-py` SDK (pinned to `0.1.27` in `scripts/config.py` and `requirements.txt`), which is auto-installed — or upgraded from an older version — on first run.
 - **Public.com account** — Create one at https://public.com/signup
 - **Public.com API key** — Once you create your Public.com brokerage account, get an API key at https://public.com/settings/v2/api
 
@@ -86,6 +87,9 @@ Each capability is implemented as a script under `scripts/`. The agent picks the
 | `get_event_summary.py` | Page through event contracts: sort by volume / expiration / recently added; filter by category, event symbol, frequency, resolution time |
 | `get_event_details.py` | One event's outcomes, YES/NO contract prices, trading timeline, and CFTC terms |
 | `get_event_contract_bars.py` | Price bars for up to 8 contracts of one event (DAY / WEEK / MONTH / ALL) |
+| `get_current_event.py` | The open event of a recurring series (e.g. `KXBTC15M` 15-minute windows) that closes soonest, with YES/NO prices; `--wait` polls until one is listed |
+| `preflight_event_contract.py` / `buy_event_contract.py` | Preflight + place a DAY limit buy of an event contract's YES or NO side, by event symbol (priced at the ask rounded up to a cent) or by contract symbol + limit price |
+| `wait_for_settlement.py` | Block until an event contract outcome settles; report the winning side and whether your contract won |
 | `get_strategy_quote.py` | Net quote (debit/credit, bid/ask/mark) for a 1-6 leg option strategy, with per-leg quotes |
 | `preflight.py` / `place_order.py` | Preflight + place a single-leg equity/option/crypto order; `place_order.py` also supports bracket orders (`--order-class` + take-profit / stop-loss exits) and selling specific tax lots (`--tax-lot`) |
 | `preflight_spread.py` / `place_spread.py` | Preflight + place a vertical spread (CALL/PUT × CREDIT/DEBIT) |
@@ -111,6 +115,7 @@ For per-command argument details, see [SKILL.md](SKILL.md) or run any script wit
 - Show my unrealized tax lots for AAPL and sell the 4 shares from my highest-cost lot.
 - What did I buy last week? Show my filled orders since Monday.
 - What are the most-traded prediction markets right now? Show me the odds on the top one and how they've moved this week.
+- Buy 1 YES contract on the current 15-minute Bitcoin window, wait for it to fill, and tell me whether it won.
 - Find investment-grade corporate bonds yielding over 5% that mature within five years, then show me the details for the top result.
 - Quote an SPY iron condor for the March 13 expiration before I place it.
 - Set up an iron condor on AAPL for the December 19 expiration: short the 190 put / long the 185 put, short the 210 call / long the 215 call. Preflight first.
