@@ -33,6 +33,10 @@ def get_portfolio(account_id=None):
         print(f"  Buying Power:         ${bp.buying_power:,.2f}")
         print(f"  Cash Only:            ${bp.cash_only_buying_power:,.2f}")
         print(f"  Options Buying Power: ${bp.options_buying_power:,.2f}")
+        # Optional; the API reports the same value as Buying Power when the account
+        # is not enabled for day-trade buying power.
+        if bp.day_trade_buying_power is not None:
+            print(f"  Day Trade Buying Power: ${bp.day_trade_buying_power:,.2f}")
 
         # Cash & withdrawals (all optional in the API)
         atw = portfolio.available_to_withdraw
