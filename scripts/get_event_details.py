@@ -70,6 +70,8 @@ def get_event_details(event_symbol, all_outcomes=True):
             print("\n" + "-" * 78)
             print(f"  {outcome.title or outcome.outcome_id}")
             print(f"    Outcome ID: {outcome.outcome_id}")
+            if outcome.floor_strike is not None:
+                print(f"    Floor Strike: {outcome.floor_strike}")
             meta = []
             if outcome.state is not None:
                 meta.append(f"State {outcome.state.value}")

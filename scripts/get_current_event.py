@@ -103,6 +103,8 @@ def get_current_event(series, frequency="FIFTEEN_MINUTES", category=None, subcat
                 print("\n" + "-" * 78)
                 print(f"  {outcome.title or outcome.outcome_id}")
                 print(f"    Outcome ID:  {outcome.outcome_id}")
+                if outcome.floor_strike is not None:
+                    print(f"    Floor Strike: {outcome.floor_strike}")
                 print(f"    Tradable:    {'yes' if outcome.is_tradable else 'no'}  |  "
                       f"Closes {_fmt_ts(outcome.close_time)} ({_fmt_left(outcome.seconds_left)} left)")
                 for label, contract in (("YES", outcome.yes), ("NO", outcome.no)):

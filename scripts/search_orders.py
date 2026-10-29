@@ -161,7 +161,11 @@ def search_orders(request, account_id=None):
                 legs = ", ".join(f"{leg.side.value} {leg.instrument.symbol}" for leg in order.legs)
                 print(f"     Legs: {legs}")
             if order.trades:
-                print(f"     Trades: {len(order.trades)} fill(s)")
+                # Distinct execution venues (ISO 10383 MIC), in fill order
+                venues = list(dict.fromkeys(t.market_identification_code for t in order.trades
+                                            if t.market_identification_code))
+                venue_text = f" on {', '.join(venues)}" if venues else ""
+                print(f"     Trades: {len(order.trades)} fill(s){venue_text}")
             if order.reject_reason:
                 print(f"     ⚠️  Reject Reason: {order.reject_reason}")
 

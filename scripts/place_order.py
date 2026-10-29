@@ -26,6 +26,10 @@ from public_api_sdk import (
 )
 
 BRACKET_CLASSES = ("BRACKET", "OCO", "OTO")
+ORDER_TYPES = ["LIMIT", "MARKET", "STOP", "STOP_LIMIT", "MARKET_ON_CLOSE", "LIMIT_ON_CLOSE"]
+# Which order types take which prices (mirrors the SDK's OrderRequest validation).
+LIMIT_PRICE_TYPES = ("LIMIT", "STOP_LIMIT", "LIMIT_ON_CLOSE")
+STOP_PRICE_TYPES = ("STOP", "STOP_LIMIT")
 
 
 def place_order(
@@ -64,14 +68,20 @@ def place_order(
         print("Error: Either --quantity or --amount must be provided.")
         sys.exit(1)
 
-    # Validate limit price for LIMIT/STOP_LIMIT orders
-    if order_type in ["LIMIT", "STOP_LIMIT"] and limit_price is None:
+    # Validate limit price: required for LIMIT/STOP_LIMIT/LIMIT_ON_CLOSE, not allowed otherwise
+    if order_type in LIMIT_PRICE_TYPES and limit_price is None:
         print(f"Error: --limit-price is required for {order_type} orders.")
         sys.exit(1)
+    if order_type not in LIMIT_PRICE_TYPES and limit_price is not None:
+        print(f"Error: --limit-price is only valid for LIMIT, STOP_LIMIT or LIMIT_ON_CLOSE orders, not {order_type}.")
+        sys.exit(1)
 
-    # Validate stop price for STOP/STOP_LIMIT orders
-    if order_type in ["STOP", "STOP_LIMIT"] and stop_price is None:
+    # Validate stop price: required for STOP/STOP_LIMIT, not allowed otherwise
+    if order_type in STOP_PRICE_TYPES and stop_price is None:
         print(f"Error: --stop-price is required for {order_type} orders.")
+        sys.exit(1)
+    if order_type not in STOP_PRICE_TYPES and stop_price is not None:
+        print(f"Error: --stop-price is only valid for STOP or STOP_LIMIT orders, not {order_type}.")
         sys.exit(1)
 
     # Bracket-order validation. Only the rules the API documents are checked
@@ -118,6 +128,8 @@ def place_order(
         "MARKET": OrderType.MARKET,
         "STOP": OrderType.STOP,
         "STOP_LIMIT": OrderType.STOP_LIMIT,
+        "MARKET_ON_CLOSE": OrderType.MARKET_ON_CLOSE,
+        "LIMIT_ON_CLOSE": OrderType.LIMIT_ON_CLOSE,
     }
     session_map = {
         "CORE": EquityMarketSession.CORE,
@@ -249,6 +261,10 @@ if __name__ == "__main__":
                "  Bracket entry with take-profit and stop-loss exits:\n"
                "    python3 place_order.py --symbol AAPL --type EQUITY --side BUY --order-type LIMIT --quantity 10 --limit-price 227.50 \\\n"
                "      --order-class BRACKET --take-profit-limit 240.00 --stop-loss-stop 220.00\n\n"
+               "  Limit-on-close buy (fills at the closing price, only at or below the limit):\n"
+               "    python3 place_order.py --symbol AAPL --type EQUITY --side BUY --order-type LIMIT_ON_CLOSE --quantity 10 --limit-price 227.50\n\n"
+               "  Market-on-close sell:\n"
+               "    python3 place_order.py --symbol AAPL --type EQUITY --side SELL --order-type MARKET_ON_CLOSE --quantity 10\n\n"
                "  Sell specific tax lots (IDs from get_tax_lots.py --symbol AAPL):\n"
                "    python3 place_order.py --symbol AAPL --type EQUITY --side SELL --order-type MARKET --quantity 10 --open-close CLOSE \\\n"
                "      --tax-lot LOT_A:6 --tax-lot LOT_B:4",
@@ -270,12 +286,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--order-type",
         required=True,
-        choices=["LIMIT", "MARKET", "STOP", "STOP_LIMIT"],
-        help="Order type",
+        choices=ORDER_TYPES,
+        help="Order type. MARKET_ON_CLOSE / LIMIT_ON_CLOSE execute at the market close.",
     )
     parser.add_argument("--quantity", type=float, help="Number of shares")
     parser.add_argument("--amount", type=float, help="Notional dollar amount")
-    parser.add_argument("--limit-price", type=float, help="Limit price (required for LIMIT/STOP_LIMIT)")
+    parser.add_argument("--limit-price", type=float, help="Limit price (required for LIMIT/STOP_LIMIT/LIMIT_ON_CLOSE)")
     parser.add_argument("--stop-price", type=float, help="Stop price (required for STOP/STOP_LIMIT)")
     parser.add_argument(
         "--session",
@@ -303,7 +319,8 @@ if __name__ == "__main__":
         choices=["SIMPLE", "BRACKET", "OCO", "OTO"],
         help="SIMPLE (default) places a standalone order. BRACKET/OCO/OTO attach exit legs "
              "(--take-profit-limit and/or --stop-loss-stop) that submit once this entry fills. "
-             "EQUITY/OPTION only, whole-share --quantity, CORE session, entry LIMIT or MARKET (LIMIT only for OCO).",
+             "EQUITY/OPTION only, whole-share --quantity, CORE session, entry LIMIT or MARKET (LIMIT only for OCO; "
+             "not the on-close types).",
     )
     parser.add_argument("--take-profit-limit", type=float, help="Bracket: limit price of the take-profit exit leg")
     parser.add_argument("--stop-loss-stop", type=float, help="Bracket: stop price of the stop-loss exit leg (placed as a STOP order)")

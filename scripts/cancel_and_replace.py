@@ -15,6 +15,12 @@ from public_api_sdk import (
     TimeInForce,
 )
 
+ORDER_TYPES = ["LIMIT", "MARKET", "STOP", "STOP_LIMIT", "MARKET_ON_CLOSE", "LIMIT_ON_CLOSE"]
+# Which order types take which prices. The SDK's CancelAndReplaceRequest does not
+# check this itself, so the script does (same rules as place_order.py / preflight.py).
+LIMIT_PRICE_TYPES = ("LIMIT", "STOP_LIMIT", "LIMIT_ON_CLOSE")
+STOP_PRICE_TYPES = ("STOP", "STOP_LIMIT")
+
 
 def _build_expiration(time_in_force, expiration_time):
     if time_in_force == "GTD":
@@ -55,11 +61,17 @@ def cancel_and_replace(
     if quantity is not None and amount is not None:
         print("Error: --quantity and --amount are mutually exclusive.")
         sys.exit(1)
-    if order_type in ("LIMIT", "STOP_LIMIT") and limit_price is None:
+    if order_type in LIMIT_PRICE_TYPES and limit_price is None:
         print(f"Error: --limit-price is required for {order_type} orders.")
         sys.exit(1)
-    if order_type in ("STOP", "STOP_LIMIT") and stop_price is None:
+    if order_type not in LIMIT_PRICE_TYPES and limit_price is not None:
+        print(f"Error: --limit-price is only valid for LIMIT, STOP_LIMIT or LIMIT_ON_CLOSE orders, not {order_type}.")
+        sys.exit(1)
+    if order_type in STOP_PRICE_TYPES and stop_price is None:
         print(f"Error: --stop-price is required for {order_type} orders.")
+        sys.exit(1)
+    if order_type not in STOP_PRICE_TYPES and stop_price is not None:
+        print(f"Error: --stop-price is only valid for STOP or STOP_LIMIT orders, not {order_type}.")
         sys.exit(1)
 
     order_type_map = {
@@ -67,6 +79,8 @@ def cancel_and_replace(
         "MARKET": OrderType.MARKET,
         "STOP": OrderType.STOP,
         "STOP_LIMIT": OrderType.STOP_LIMIT,
+        "MARKET_ON_CLOSE": OrderType.MARKET_ON_CLOSE,
+        "LIMIT_ON_CLOSE": OrderType.LIMIT_ON_CLOSE,
     }
 
     try:
@@ -123,21 +137,24 @@ def cancel_and_replace(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Cancel an existing order and replace it with one that has new parameters",
-        epilog="Example:\n"
+        epilog="Examples:\n"
                "  python3 cancel_and_replace.py --order-id 345d3e58-5ba3-401a-ac89-1b756332cc94 \\\n"
-               "    --order-type LIMIT --quantity 10 --limit-price 230.00",
+               "    --order-type LIMIT --quantity 10 --limit-price 230.00\n\n"
+               "  Turn an open order into a limit-on-close order:\n"
+               "  python3 cancel_and_replace.py --order-id 345d3e58-5ba3-401a-ac89-1b756332cc94 \\\n"
+               "    --order-type LIMIT_ON_CLOSE --quantity 10 --limit-price 230.00",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--order-id", required=True, help="UUID of the existing order to cancel and replace")
     parser.add_argument(
         "--order-type",
         required=True,
-        choices=["LIMIT", "MARKET", "STOP", "STOP_LIMIT"],
-        help="Type of the replacement order",
+        choices=ORDER_TYPES,
+        help="Type of the replacement order. MARKET_ON_CLOSE / LIMIT_ON_CLOSE execute at the market close.",
     )
     parser.add_argument("--quantity", type=float, help="New quantity (omit to keep original; mutually exclusive with --amount)")
     parser.add_argument("--amount", type=float, help="New notional dollar amount (mutually exclusive with --quantity)")
-    parser.add_argument("--limit-price", type=float, help="New limit price (required for LIMIT/STOP_LIMIT)")
+    parser.add_argument("--limit-price", type=float, help="New limit price (required for LIMIT/STOP_LIMIT/LIMIT_ON_CLOSE)")
     parser.add_argument("--stop-price", type=float, help="New stop price (required for STOP/STOP_LIMIT)")
     parser.add_argument("--time-in-force", choices=["DAY", "GTD"], default="DAY")
     parser.add_argument(

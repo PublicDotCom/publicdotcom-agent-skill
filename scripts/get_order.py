@@ -86,8 +86,9 @@ def get_order(order_id, account_id=None):
                 qty = trade.quantity if trade.quantity is not None else "?"
                 price = f"${trade.price}" if trade.price is not None else "?"
                 when = _fmt_ts(trade.timestamp) or "n/a"
+                venue = f"  venue {trade.market_identification_code}" if trade.market_identification_code else ""
                 trade_id = f"  id {trade.trade_id}" if trade.trade_id else ""
-                print(f"    [{i}] {side} {qty} {trade.instrument.symbol} @ {price}  {when}{trade_id}")
+                print(f"    [{i}] {side} {qty} {trade.instrument.symbol} @ {price}  {when}{venue}{trade_id}")
         else:
             print("\n  Trades:        none yet")
 

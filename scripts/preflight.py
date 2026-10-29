@@ -20,6 +20,11 @@ from public_api_sdk import (
     OpenCloseIndicator,
 )
 
+ORDER_TYPES = ["LIMIT", "MARKET", "STOP", "STOP_LIMIT", "MARKET_ON_CLOSE", "LIMIT_ON_CLOSE"]
+# Which order types take which prices (mirrors the SDK's PreflightRequest validation).
+LIMIT_PRICE_TYPES = ("LIMIT", "STOP_LIMIT", "LIMIT_ON_CLOSE")
+STOP_PRICE_TYPES = ("STOP", "STOP_LIMIT")
+
 
 def perform_preflight(
     symbol,
@@ -43,14 +48,15 @@ def perform_preflight(
         symbol: The ticker symbol (e.g., AAPL, BTC, NVDA260213P00177500)
         instrument_type: EQUITY, OPTION, or CRYPTO
         side: BUY or SELL
-        order_type: LIMIT, MARKET, STOP, or STOP_LIMIT
+        order_type: LIMIT, MARKET, STOP, STOP_LIMIT, MARKET_ON_CLOSE, or LIMIT_ON_CLOSE
         quantity: Number of shares/contracts
         amount: Notional dollar amount (alternative to quantity)
-        limit_price: Limit price for LIMIT/STOP_LIMIT orders
+        limit_price: Limit price for LIMIT/STOP_LIMIT/LIMIT_ON_CLOSE orders
         stop_price: Stop price for STOP/STOP_LIMIT orders
         session: CORE or EXTENDED (for equity orders)
         open_close: OPEN or CLOSE (for option orders)
-        time_in_force: DAY or GTC
+        time_in_force: DAY or GTD
+        expiration_time: Expiration date/time, required for GTD
         account_id: Account ID (optional if PUBLIC_COM_ACCOUNT_ID is set)
     """
     secret = get_api_secret()
@@ -69,14 +75,20 @@ def perform_preflight(
         print("Error: Either --quantity or --amount must be provided.")
         sys.exit(1)
 
-    # Validate limit price for LIMIT/STOP_LIMIT orders
-    if order_type in ["LIMIT", "STOP_LIMIT"] and limit_price is None:
+    # Validate limit price: required for LIMIT/STOP_LIMIT/LIMIT_ON_CLOSE, not allowed otherwise
+    if order_type in LIMIT_PRICE_TYPES and limit_price is None:
         print(f"Error: --limit-price is required for {order_type} orders.")
         sys.exit(1)
+    if order_type not in LIMIT_PRICE_TYPES and limit_price is not None:
+        print(f"Error: --limit-price is only valid for LIMIT, STOP_LIMIT or LIMIT_ON_CLOSE orders, not {order_type}.")
+        sys.exit(1)
 
-    # Validate stop price for STOP/STOP_LIMIT orders
-    if order_type in ["STOP", "STOP_LIMIT"] and stop_price is None:
+    # Validate stop price: required for STOP/STOP_LIMIT, not allowed otherwise
+    if order_type in STOP_PRICE_TYPES and stop_price is None:
         print(f"Error: --stop-price is required for {order_type} orders.")
+        sys.exit(1)
+    if order_type not in STOP_PRICE_TYPES and stop_price is not None:
+        print(f"Error: --stop-price is only valid for STOP or STOP_LIMIT orders, not {order_type}.")
         sys.exit(1)
 
     # Map string values to enums
@@ -94,6 +106,8 @@ def perform_preflight(
         "MARKET": OrderType.MARKET,
         "STOP": OrderType.STOP,
         "STOP_LIMIT": OrderType.STOP_LIMIT,
+        "MARKET_ON_CLOSE": OrderType.MARKET_ON_CLOSE,
+        "LIMIT_ON_CLOSE": OrderType.LIMIT_ON_CLOSE,
     }
     session_map = {
         "CORE": EquityMarketSession.CORE,
@@ -185,18 +199,38 @@ def perform_preflight(
         if open_close and instrument_type == "OPTION":
             print(f"    Open/Close: {open_close}")
 
-        # Preflight response details
+        # Preflight response details (fields of the SDK's PreflightResponse; all but
+        # order_value are optional and only printed when the API returns them)
         print("\n  ESTIMATED IMPACT:")
-        if hasattr(preflight_response, 'estimated_total_cost') and preflight_response.estimated_total_cost is not None:
-            print(f"    Estimated Total Cost: ${preflight_response.estimated_total_cost}")
-        if hasattr(preflight_response, 'estimated_price') and preflight_response.estimated_price is not None:
-            print(f"    Estimated Price: ${preflight_response.estimated_price}")
-        if hasattr(preflight_response, 'estimated_quantity') and preflight_response.estimated_quantity is not None:
-            print(f"    Estimated Quantity: {preflight_response.estimated_quantity}")
-        if hasattr(preflight_response, 'buying_power_impact') and preflight_response.buying_power_impact is not None:
-            print(f"    Buying Power Impact: ${preflight_response.buying_power_impact}")
-        if hasattr(preflight_response, 'fees') and preflight_response.fees is not None:
-            print(f"    Estimated Fees: ${preflight_response.fees}")
+        fields = [
+            ("Order Value", preflight_response.order_value, True),
+            ("Estimated Cost", preflight_response.estimated_cost, True),
+            ("Estimated Proceeds", preflight_response.estimated_proceeds, True),
+            ("Estimated Quantity", preflight_response.estimated_quantity, False),
+            ("Buying Power Req.", preflight_response.buying_power_requirement, True),
+            ("Commission", preflight_response.estimated_commission, True),
+            ("Execution Fee", preflight_response.estimated_execution_fee, True),
+            ("Index Option Fee", preflight_response.estimated_index_option_fee, True),
+        ]
+        for label, value, money in fields:
+            if value is not None:
+                print(f"    {label + ':':<22}{'$' if money else ''}{value}")
+        fees = preflight_response.regulatory_fees
+        if fees is not None:
+            reg = [
+                (name, value)
+                for name, value in (
+                    ("SEC", fees.sec_fee),
+                    ("TAF", fees.taf_fee),
+                    ("ORF", fees.orf_fee),
+                    ("Exchange", fees.exchange_fee),
+                    ("OCC", fees.occ_fee),
+                    ("CAT", fees.cat_fee),
+                )
+                if value is not None
+            ]
+            if reg:
+                print(f"    {'Regulatory Fees:':<22}" + ", ".join(f"{name} ${value}" for name, value in reg))
 
         # Print full response for debugging/visibility
         print("\n  FULL RESPONSE:")
@@ -216,6 +250,8 @@ if __name__ == "__main__":
         epilog="Examples:\n"
                "  Equity limit buy:\n"
                "    python3 preflight.py --symbol AAPL --type EQUITY --side BUY --order-type LIMIT --quantity 10 --limit-price 227.50\n\n"
+               "  Limit-on-close buy:\n"
+               "    python3 preflight.py --symbol AAPL --type EQUITY --side BUY --order-type LIMIT_ON_CLOSE --quantity 10 --limit-price 227.50\n\n"
                "  Equity market sell:\n"
                "    python3 preflight.py --symbol AAPL --type EQUITY --side SELL --order-type MARKET --quantity 10\n\n"
                "  Crypto buy by amount:\n"
@@ -240,12 +276,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--order-type",
         required=True,
-        choices=["LIMIT", "MARKET", "STOP", "STOP_LIMIT"],
-        help="Order type",
+        choices=ORDER_TYPES,
+        help="Order type. MARKET_ON_CLOSE / LIMIT_ON_CLOSE execute at the market close.",
     )
     parser.add_argument("--quantity", type=float, help="Number of shares/contracts")
     parser.add_argument("--amount", type=float, help="Notional dollar amount")
-    parser.add_argument("--limit-price", type=float, help="Limit price (required for LIMIT/STOP_LIMIT)")
+    parser.add_argument("--limit-price", type=float, help="Limit price (required for LIMIT/STOP_LIMIT/LIMIT_ON_CLOSE)")
     parser.add_argument("--stop-price", type=float, help="Stop price (required for STOP/STOP_LIMIT)")
     parser.add_argument(
         "--session",

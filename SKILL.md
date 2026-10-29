@@ -7,7 +7,7 @@ metadata:
   source: https://github.com/PublicDotCom/publicdotcom-agent-skill
   category: "Finance"
   tags: ["investing", "stocks", "crypto", "options", "public", "finance"]
-  version: "1.3"
+  version: "1.4"
 ---
 
 # Public.com Account Manager
@@ -22,9 +22,9 @@ This skill allows users to interact with their Public.com brokerage account.
 - **Public.com account** — Create one at https://public.com/signup
 - **Public.com API key** — Get one at https://public.com/settings/v2/api
 
-The `publicdotcom-py` SDK is required, pinned to **0.1.27** (`scripts/config.py`). It will be **auto-installed** on first run — and auto-upgraded if an older version is present — or you can install manually:
+The `publicdotcom-py` SDK is required, pinned to **0.1.28** (`scripts/config.py`). It will be **auto-installed** on first run — and auto-upgraded if an older version is present — or you can install manually:
 ```bash
-pip install publicdotcom-py==0.1.27
+pip install publicdotcom-py==0.1.28
 ```
 
 ## Configuration
@@ -74,7 +74,7 @@ When the user asks to "get my portfolio", "show my holdings", or "what's in my a
 1. If `PUBLIC_COM_ACCOUNT_ID` is set, execute `python3 scripts/get_portfolio.py` (no arguments needed).
 2. If not set and you don't know the user's account ID, first run `get_accounts.py` to retrieve it.
 3. Execute `python3 scripts/get_portfolio.py --account-id [ACCOUNT_ID]`
-4. Report the portfolio summary (equity, buying power, cash and available-to-withdraw when present, positions) back to the user. Positions are grouped as equities, options, crypto, event contracts, and other (bonds etc.).
+4. Report the portfolio summary (equity, buying power, cash and available-to-withdraw when present, positions) back to the user. Buying power includes cash-only, options and, when the API reports it, **day-trade buying power** (equal to buying power when the account is not enabled for day-trade buying power). Use it when the user asks "how much can I day trade" or "what's my day-trade buying power". Positions are grouped as equities, options, crypto, event contracts, and other (bonds etc.).
 
 ### Get Orders
 When the user asks to "get my orders", "show my orders", "active orders", or "pending orders":
@@ -108,9 +108,9 @@ python3 scripts/search_orders.py --symbol AAPL --symbol BTC:CRYPTO
 
 **Workflow:**
 1. Translate the user's request into filters. Relative phrases ("last week", "this month") become `--created-after` / `--created-before` timestamps; "filled" / "cancelled" become `--status`.
-2. Execute `python3 scripts/search_orders.py [FILTERS]` and summarize the matches (symbol, side, type, status, quantity or notional, filled quantity and average price, created / filled time, bracket ID).
+2. Execute `python3 scripts/search_orders.py [FILTERS]` and summarize the matches (symbol, side, type, status, quantity or notional, filled quantity and average price, created / filled time, bracket ID, and the number of fills with their execution venues).
 3. If the output warns that the result was capped at 500, tighten the window or add filters and run again.
-4. For the individual fills (trades), market session and fill / replace timestamps of one order, follow up with `get_order.py --order-id [ID]` (see **Get Order Status**).
+4. For the individual fills (trades, each with its execution venue), market session and fill / replace timestamps of one order, follow up with `get_order.py --order-id [ID]` (see **Get Order Status**).
 
 ### Get History
 When the user asks to "get my history", "show my transactions", "transaction history", "trade history", or wants to see past account activity:
@@ -482,18 +482,18 @@ When the user asks to "set my default account" or "use account X as default":
 2. Confirm to the user that future requests will use this account by default.
 
 ### Preflight Calculation
-When the user asks to "estimate order cost", "preflight an order", "what would it cost to buy", "check buying power impact", or wants to see the estimated cost and account impact before placing an order:
+When the user asks to "estimate order cost", "preflight an order", "what would it cost to buy", "check buying power impact", "what would a market-on-close order cost", or wants to see the estimated cost and account impact before placing an order:
 
 **Required parameters:**
 - `--symbol`: The ticker symbol (e.g., AAPL, BTC, or option symbol like NVDA260213P00177500)
 - `--type`: EQUITY, OPTION, or CRYPTO
 - `--side`: BUY or SELL
-- `--order-type`: LIMIT, MARKET, STOP, or STOP_LIMIT
+- `--order-type`: LIMIT, MARKET, STOP, STOP_LIMIT, MARKET_ON_CLOSE, or LIMIT_ON_CLOSE (the on-close types execute at the market close)
 - `--quantity` OR `--amount`: Number of shares/contracts OR notional dollar amount
 
 **Conditional parameters:**
-- `--limit-price`: Required for LIMIT and STOP_LIMIT orders
-- `--stop-price`: Required for STOP and STOP_LIMIT orders
+- `--limit-price`: Required for LIMIT, STOP_LIMIT and LIMIT_ON_CLOSE orders; rejected for every other type (including MARKET_ON_CLOSE)
+- `--stop-price`: Required for STOP and STOP_LIMIT orders; rejected for every other type
 - `--session`: CORE (default) or EXTENDED for equity orders
 - `--open-close`: OPEN or CLOSE for options orders (OPEN to open a new position, CLOSE to close existing)
 - `--time-in-force`: DAY (default) or GTD (Good Till Date — requires `--expiration-time YYYY-MM-DD`, max 90 days out)
@@ -508,6 +508,11 @@ python3 scripts/preflight.py --symbol AAPL --type EQUITY --side BUY --order-type
 Equity market sell preflight:
 ```bash
 python3 scripts/preflight.py --symbol AAPL --type EQUITY --side SELL --order-type MARKET --quantity 10
+```
+
+Limit-on-close buy preflight:
+```bash
+python3 scripts/preflight.py --symbol AAPL --type EQUITY --side BUY --order-type LIMIT_ON_CLOSE --quantity 10 --limit-price 227.50
 ```
 
 Crypto buy by amount preflight:
@@ -528,33 +533,35 @@ python3 scripts/preflight.py --symbol NVDA260213P00177500 --type OPTION --side S
 **Workflow:**
 1. Gather the order parameters from the user (symbol, type, side, order type, quantity/amount, prices if needed).
 2. Execute: `python3 scripts/preflight.py [OPTIONS]`
-3. Report the estimated cost, buying power impact, and any fees to the user.
+3. Report the order value, estimated cost (or proceeds for a sell), buying power requirement, commission and fees (execution, index-option and regulatory) to the user. Only the fields the API returns are printed.
 4. If the user wants to proceed, use the `place_order.py` script with the same parameters.
 5. For a bracket order, preflight the **entry** order only — the API does not preflight take-profit / stop-loss exit legs, so `preflight.py` has no bracket flags.
 
 ### Place Order
-When the user asks to "buy", "sell", "place an order", or "trade":
+When the user asks to "buy", "sell", "place an order", "trade", or to "buy at the close" / "sell at the close" (a market-on-close or limit-on-close order):
 
 **Required parameters:**
 - `--symbol`: The ticker symbol (e.g., AAPL, BTC)
 - `--type`: EQUITY, OPTION, or CRYPTO
 - `--side`: BUY or SELL
-- `--order-type`: LIMIT, MARKET, STOP, or STOP_LIMIT
+- `--order-type`: LIMIT, MARKET, STOP, STOP_LIMIT, MARKET_ON_CLOSE, or LIMIT_ON_CLOSE
 - `--quantity` OR `--amount`: Number of shares OR notional dollar amount
 
 **Conditional parameters:**
-- `--limit-price`: Required for LIMIT and STOP_LIMIT orders
-- `--stop-price`: Required for STOP and STOP_LIMIT orders
+- `--limit-price`: Required for LIMIT, STOP_LIMIT and LIMIT_ON_CLOSE orders; rejected for every other type (including MARKET_ON_CLOSE)
+- `--stop-price`: Required for STOP and STOP_LIMIT orders; rejected for every other type
 - `--session`: CORE (default) or EXTENDED for equity orders
 - `--open-close`: OPEN or CLOSE for options orders
 - `--time-in-force`: DAY (default) or GTD (Good Till Date — requires `--expiration-time YYYY-MM-DD`, max 90 days out)
+
+**On-close orders:** MARKET_ON_CLOSE and LIMIT_ON_CLOSE orders execute at the market close. LIMIT_ON_CLOSE needs `--limit-price`; MARKET_ON_CLOSE takes no price. The API decides which instruments, sessions and times of day accept them, so a rejection comes back as an API error.
 
 **Bracket orders (optional):** attach exit legs that are submitted automatically once the entry fills.
 - `--order-class`: SIMPLE (default) or BRACKET / OCO / OTO
 - `--take-profit-limit`: limit price of the take-profit leg (placed on the opposite side of the entry)
 - `--stop-loss-stop`: stop price of the stop-loss leg (a STOP order, or STOP_LIMIT when `--stop-loss-limit` is also given)
 - `--stop-loss-limit`: optional limit price for the stop-loss leg (requires `--stop-loss-stop`)
-- Rules: a bracket class needs **at least one** exit leg (both is typical); EQUITY or OPTION only; whole-share `--quantity` (no `--amount`); CORE session; entry `--order-type` LIMIT or MARKET (LIMIT only for OCO). Every leg, entry included, reports the entry's order ID as its **Bracket ID**, which `get_orders.py` / `get_order.py` show.
+- Rules: a bracket class needs **at least one** exit leg (both is typical); EQUITY or OPTION only; whole-share `--quantity` (no `--amount`); CORE session; entry `--order-type` LIMIT or MARKET (LIMIT only for OCO; the on-close types can't be bracket entries). Every leg, entry included, reports the entry's order ID as its **Bracket ID**, which `get_orders.py` / `get_order.py` show.
 
 **Sell specific tax lots (optional):**
 - `--tax-lot LOT_ID:QUANTITY`: repeat up to 8 times. Only for an EQUITY **SELL** with `--open-close CLOSE`, MARKET or good-for-day LIMIT; the lot quantities must sum to `--quantity`; all lots must belong to the order's symbol. Get **Lot Selection IDs** from `get_tax_lots.py --symbol SYMBOL`. The broker does not guarantee the instructions are applied exactly.
@@ -569,6 +576,16 @@ python3 scripts/place_order.py --symbol AAPL --type EQUITY --side BUY --order-ty
 Sell $500 worth of AAPL at market price:
 ```bash
 python3 scripts/place_order.py --symbol AAPL --type EQUITY --side SELL --order-type MARKET --amount 500
+```
+
+Buy 10 shares of AAPL at the close, only if the closing price is $227.50 or lower (limit-on-close):
+```bash
+python3 scripts/place_order.py --symbol AAPL --type EQUITY --side BUY --order-type LIMIT_ON_CLOSE --quantity 10 --limit-price 227.50
+```
+
+Sell 10 shares of AAPL at the close (market-on-close):
+```bash
+python3 scripts/place_order.py --symbol AAPL --type EQUITY --side SELL --order-type MARKET_ON_CLOSE --quantity 10
 ```
 
 Buy crypto with extended hours:
@@ -755,7 +772,7 @@ python3 scripts/get_event_details.py --event-symbol KALSHI.KXBALANCESHEET-EO26
 
 **Workflow:**
 1. Execute `python3 scripts/get_event_details.py --event-symbol [EVENT_SYMBOL]`.
-2. Report the event (title, series, category, exchange, status, volume) and, per outcome: title, state, trading mode, whether it is tradable right now and the time left until close, settlement and the winning contract once settled, the YES/NO contracts with bid / ask / last (shown as dollars and implied %), and the rules.
+2. Report the event (title, series, category, exchange, status, volume) and, per outcome: title, floor strike (when the outcome has one, e.g. `6.6` for "above $6.6 trillion"), state, trading mode, whether it is tradable right now and the time left until close, settlement and the winning contract once settled, the YES/NO contracts with bid / ask / last (shown as dollars and implied %), and the rules.
 3. Mention the CFTC contract terms link and resolution sources when the user asks how the market settles.
 4. An unknown event symbol returns a validation error (code 7004) — re-check the symbol with **Get Event Summary**.
 5. "Tradable" needs state OPEN, trading BUY_AND_SELL and a close time still in the future — an outcome can report STATE_OPEN after it has closed, so go by "Tradable", not the state.
@@ -807,7 +824,7 @@ python3 scripts/get_current_event.py --series KXBTC15M --wait --timeout 300
 **Workflow:**
 1. If the user names a market but not its series, find an event with **Get Event Summary** (e.g. `--frequency FIFTEEN_MINUTES --category Crypto`) and read its Series line.
 2. Execute `python3 scripts/get_current_event.py --series [SERIES]`.
-3. Report the event symbol, when it resolves and how long is left, and the YES/NO bid/ask. The window picked is the open one that closes soonest; windows already past their close (which the API still lists for a few minutes) are skipped.
+3. Report the event symbol, when it resolves and how long is left, and the YES/NO bid/ask (plus each outcome's floor strike when it has one). The window picked is the open one that closes soonest; windows already past their close (which the API still lists for a few minutes) are skipped.
 
 ### Preflight Event Contract
 When the user asks "what would it cost to buy YES on this market", "preflight a prediction market buy", or wants the cost of an event-contract buy before placing it:
@@ -1020,14 +1037,14 @@ When the user asks to "check order status", "is my order filled", "what happened
 python3 scripts/get_order.py --order-id 345d3e58-5ba3-401a-ac89-1b756332cc94
 ```
 
-Also use it when the user asks "what trades filled this order", "when did order X fill", "at what prices did my order execute", or "which session was this order placed in".
+Also use it when the user asks "what trades filled this order", "when did order X fill", "at what prices did my order execute", "which exchange / venue filled my order", or "which session was this order placed in".
 
 **Workflow:**
 1. Execute: `python3 scripts/get_order.py --order-id [ID]`
 2. Report the order's status, filled quantity, average price, and reject reason (if any).
 3. Multi-leg orders also include a per-leg breakdown.
 4. Bracket orders show a **Bracket ID** (the entry order's ID). Use it to relate the entry to its take-profit / stop-loss legs in `get_orders.py`.
-5. The output also includes the **Session** (REGULAR, REST_OF_DAY or TWENTY_FOUR_HOURS — as reported by the API; these names differ from the `--session` values used when placing an order), the **Timeline** (created, filled, replaced, closed, last modified) and each **Trade**: side, quantity, symbol, execution price, time and trade ID. Partial fills show up as several trades.
+5. The output also includes the **Session** (REGULAR, REST_OF_DAY or TWENTY_FOUR_HOURS — as reported by the API; these names differ from the `--session` values used when placing an order), the **Timeline** (created, filled, replaced, closed, last modified) and each **Trade**: side, quantity, symbol, execution price, time, execution venue (`venue XNAS` — the ISO 10383 Market Identifier Code, when the API reports it) and trade ID. Partial fills show up as several trades.
 6. Only orders created within the **last 30 days** can be looked up — an older order returns a not-found error. To find an order ID first (e.g. "my AAPL buy from Tuesday"), run **Search Orders**.
 
 ### Wait For Fill
@@ -1057,20 +1074,26 @@ When the user wants to "modify my order", "change the limit price", "update the 
 
 **Required parameters:**
 - `--order-id`: UUID of the existing order to replace
-- `--order-type`: New order type (LIMIT, MARKET, STOP, STOP_LIMIT)
+- `--order-type`: New order type (LIMIT, MARKET, STOP, STOP_LIMIT, MARKET_ON_CLOSE, LIMIT_ON_CLOSE)
 
 **Optional parameters:**
 - `--quantity`: New quantity (omit to keep original)
 - `--amount`: New notional dollar amount (mutually exclusive with `--quantity`)
-- `--limit-price`: Required for LIMIT/STOP_LIMIT
-- `--stop-price`: Required for STOP/STOP_LIMIT
+- `--limit-price`: Required for LIMIT/STOP_LIMIT/LIMIT_ON_CLOSE; rejected for every other type
+- `--stop-price`: Required for STOP/STOP_LIMIT; rejected for every other type
 - `--time-in-force`: DAY (default) or GTD (requires `--expiration-time`)
 - `--expiration-time`: Required when GTD
 
-**Example:**
+**Examples:**
 ```bash
 python3 scripts/cancel_and_replace.py --order-id 345d3e58-5ba3-401a-ac89-1b756332cc94 \
   --order-type LIMIT --quantity 10 --limit-price 230.00
+```
+
+Turn an open order into a limit-on-close order ("move my order to the close"):
+```bash
+python3 scripts/cancel_and_replace.py --order-id 345d3e58-5ba3-401a-ac89-1b756332cc94 \
+  --order-type LIMIT_ON_CLOSE --quantity 10 --limit-price 230.00
 ```
 
 **Workflow:**
